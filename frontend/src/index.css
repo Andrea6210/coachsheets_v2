@@ -56,25 +56,25 @@ code {
     }
 
     .dark {
-        --background: 225 25% 6%; /* #0c0e12 */
-        --foreground: 210 40% 98%;
-        --card: 224 20% 9%; /* #11141c */
-        --card-foreground: 210 40% 98%;
-        --popover: 224 20% 9%;
-        --popover-foreground: 210 40% 98%;
-        --primary: 160 84% 39%; /* OpenGym emerald #10b981 */
-        --primary-foreground: 224 25% 6%;
-        --secondary: 224 16% 14%;
-        --secondary-foreground: 210 40% 98%;
-        --muted: 224 15% 15%;
-        --muted-foreground: 215 16% 65%;
-        --accent: 239 84% 67%; /* OpenGym indigo #6366f1 */
-        --accent-foreground: 210 40% 98%;
-        --destructive: 350 89% 60%;
-        --destructive-foreground: 0 0% 100%;
-        --border: 224 15% 16%;
-        --input: 224 15% 16%;
-        --ring: 160 84% 39%;
+        --background: 240 10% 3.9%;
+        --foreground: 0 0% 98%;
+        --card: 240 10% 3.9%;
+        --card-foreground: 0 0% 98%;
+        --popover: 240 10% 3.9%;
+        --popover-foreground: 0 0% 98%;
+        --primary: 0 0% 98%;
+        --primary-foreground: 240 5.9% 10%;
+        --secondary: 240 3.7% 15.9%;
+        --secondary-foreground: 0 0% 98%;
+        --muted: 240 3.7% 15.9%;
+        --muted-foreground: 240 5% 64.9%;
+        --accent: 240 3.7% 15.9%;
+        --accent-foreground: 0 0% 98%;
+        --destructive: 0 62.8% 30.6%;
+        --destructive-foreground: 0 0% 98%;
+        --border: 240 3.7% 15.9%;
+        --input: 240 3.7% 15.9%;
+        --ring: 240 4.9% 83.9%;
     }
 }
 
@@ -83,17 +83,27 @@ code {
         @apply border-border;
     }
     body {
-        @apply bg-background text-foreground min-h-screen antialiased selection:bg-emerald-500/30 selection:text-emerald-200;
+        @apply bg-background text-foreground;
         background-attachment: fixed;
     }
 }
 
-/* Apply OpenGym dark theme background safely */
+/* Apply gradient background safely for mobile (WebView) */
 .dark body {
-    background-color: #0c0e12;
-    background-image: 
-      radial-gradient(at 15% 10%, rgba(16, 185, 129, 0.04) 0px, transparent 40%),
-      radial-gradient(at 85% 90%, rgba(99, 102, 241, 0.04) 0px, transparent 40%);
+    background-color: hsl(222, 47%, 5%);
+}
+
+.dark body::before {
+    content: "";
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    z-index: -1;
+    background: radial-gradient(circle at top right, rgba(147, 197, 253, 0.1), transparent 40%),
+                radial-gradient(circle at bottom left, rgba(192, 132, 252, 0.05), transparent 40%);
+    pointer-events: none;
 }
 
 /* Custom scrollbar */

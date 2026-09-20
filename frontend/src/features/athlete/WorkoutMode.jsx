@@ -5,40 +5,43 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Slider } from "@/components/ui/slider";
-import { Check, Clock, X, Dumbbell, ChevronRight, ChevronLeft, ArrowLeft, Trophy, Zap, Plus, Minus } from "lucide-react";
+import { Check, Clock, X, Dumbbell, ChevronRight, ChevronLeft, ArrowLeft } from "lucide-react";
 import { Calculator } from "@/features/calculator/Calculator";
 import { WorkoutToolbox } from "./WorkoutToolbox";
-import { Dialog, DialogContent, DialogTrigger } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogTrigger, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { toast } from 'sonner';
+import { MessageSquare, Settings2 } from "lucide-react";
 
 export default function WorkoutMode() {
   const { sessionId } = useParams();
   const navigate = useNavigate();
   
+  // Dummy data for now. In real app, fetch from backend via sessionId
   const [session, setSession] = useState({
-    dayName: "Giorno 1 - Upper Body (Forza)",
+    dayName: "Giorno 1 - Upper Body",
     exercises: [
-      { id: 'e1', name: 'Panca Piana con Bilanciere', targetSets: 4, targetReps: '8', targetRpe: '8', lastWeight: '80' },
-      { id: 'e2', name: 'Trazioni alla Sbarra', targetSets: 3, targetReps: '8-10', targetRpe: '9', lastWeight: 'Corpo Libero' },
-      { id: 'e3', name: 'Military Press', targetSets: 3, targetReps: '10', targetRpe: '8', lastWeight: '45' }
+      { id: 'e1', name: 'Panca Piana', targetSets: 4, targetReps: '8', targetRpe: '8' },
+      { id: 'e2', name: 'Trazioni', targetSets: 3, targetReps: '8-10', targetRpe: '9' }
     ]
   });
 
+  // State to track completed sets: { "e1-set1": { weight: 80, reps: 8, completed: true } }
   const [setLogs, setSetLogs] = useState({});
   const [activeExerciseIndex, setActiveExerciseIndex] = useState(0);
   const [restTimer, setRestTimer] = useState(0);
-  const [initialRestTime, setInitialRestTime] = useState(90);
   const [isResting, setIsResting] = useState(false);
   const [workoutEnded, setWorkoutEnded] = useState(false);
-  const [prDetected, setPrDetected] = useState(false);
   
-  const [rpe, setRpe] = useState(8);
+  // Feedback state
+  const [rpe, setRpe] = useState(5);
   const [notes, setNotes] = useState("");
-  const [exerciseNotes, setExerciseNotes] = useState({});
+  const [dailyFeedback, setDailyFeedback] = useState("");
+  const [exerciseFeedback, setExerciseFeedback] = useState({});
+  const [showConfetti, setShowConfetti] = useState(false);
 
   const activeExercise = session.exercises[activeExerciseIndex];
 
-  // Rest Timer logic
+  // Timer logic
   useEffect(() => {
     let interval;
     if (isResting && restTimer > 0) {
@@ -47,7 +50,8 @@ export default function WorkoutMode() {
       }, 1000);
     } else if (restTimer === 0 && isResting) {
       setIsResting(false);
-      toast.success("Recupero terminato! Pronto per il prossimo set 💪");
+      // Suono o haptic feedback qui in futuro con Capacitor
+      toast("Recupero terminato!");
     }
     return () => clearInterval(interval);
   }, [isResting, restTimer]);
@@ -68,36 +72,27 @@ export default function WorkoutMode() {
     const current = setLogs[key] || {};
     const isNowCompleted = !current.completed;
     
-    // Check if current weight exceeds previous last weight for PR badge
-    const weightVal = parseFloat(current.weight || activeExercise.lastWeight);
-    if (isNowCompleted && weightVal > 80 && !prDetected) {
-      setPrDetected(true);
-      toast.success("🏆 NUOVO RECORD PERSONALE (PR) REGISTRATO!");
-    }
-
     setSetLogs(prev => ({
       ...prev,
-      [key]: { 
-        weight: current.weight || activeExercise.lastWeight,
-        reps: current.reps || activeExercise.targetReps.split('-')[0],
-        completed: isNowCompleted 
-      }
+      [key]: { ...current, completed: isNowCompleted }
     }));
 
     if (isNowCompleted) {
-      setInitialRestTime(90);
+      // Avvia timer recupero (es. 90 secondi)
       setRestTimer(90);
       setIsResting(true);
     }
   };
 
-  const addRestTime = (seconds) => {
-    setRestTimer(prev => Math.max(0, prev + seconds));
+  const finishWorkout = () => {
+    // In real app: invia setLogs e feedback al backend
+    toast.success("Allenamento completato e salvato!");
+    navigate('/athlete');
   };
 
-  const finishWorkout = () => {
-    toast.success("Allenamento salvato con successo nella tua cronologia OpenGym!");
-    navigate('/athlete');
+  const endWorkoutTrigger = () => {
+    setWorkoutEnded(true);
+    setShowConfetti(true);
   };
 
   const formatTime = (seconds) => {
@@ -108,241 +103,202 @@ export default function WorkoutMode() {
 
   if (workoutEnded) {
     return (
-      <div className="min-h-screen bg-[#0c0e12] text-zinc-100 p-4 flex flex-col pt-8 space-y-6">
-        <div className="text-center space-y-2">
-          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-xs font-bold uppercase tracking-wider">
-            <Trophy className="h-4 w-4" /> Workout Completato!
-          </div>
-          <h2 className="text-2xl sm:text-3xl font-heading font-extrabold text-white">Riepilogo Sessione</h2>
-          <p className="text-xs text-zinc-400">Valuta lo sforzo percepito e salva le note per il tuo coach</p>
-        </div>
-
-        <div className="bg-zinc-900/80 border border-zinc-800 rounded-3xl p-6 space-y-6">
-          <div className="space-y-3">
-            <div className="flex justify-between items-center">
-              <label className="text-sm font-bold text-white">Sforzo Percepito (RPE: {rpe}/10)</label>
-              <span className="text-xs font-mono text-emerald-400 font-bold">
-                {rpe <= 6 ? "Leggero" : rpe <= 8 ? "Ottimo Sovraccarico" : "Massimale"}
-              </span>
+      <div className="min-h-screen premium-bg p-4 flex flex-col pt-12">
+        <h2 className="text-2xl font-bold text-center mb-6 glow-text text-white">Com'è andata?</h2>
+        <Card className="flex-1 glass-card text-slate-100">
+          <CardContent className="pt-6 space-y-8">
+            <div className="space-y-4">
+              <label className="font-medium text-lg">Difficoltà (RPE: {rpe})</label>
+              <Slider 
+                value={[rpe]} 
+                onValueChange={(val) => setRpe(val[0])} 
+                max={10} min={1} step={0.5} 
+                className="py-4"
+              />
+              <div className="flex justify-between text-xs text-muted-foreground">
+                <span>1 (Facilissimo)</span>
+                <span>10 (Massimale)</span>
+              </div>
             </div>
-            <Slider 
-              value={[rpe]} 
-              onValueChange={(val) => setRpe(val[0])} 
-              max={10} min={1} step={0.5} 
-              className="py-2"
-            />
-            <div className="flex justify-between text-[11px] text-zinc-500 font-mono">
-              <span>1 (Molto Facile)</span>
-              <span>10 (Cedimento totale)</span>
+
+            <div className="space-y-4">
+              <label className="font-medium text-lg">Note Finali</label>
+              <Textarea 
+                placeholder="Note generali sull'allenamento (es. spalla sinistra ok oggi)..."
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+                className="min-h-[100px]"
+              />
             </div>
-          </div>
-
-          <div className="space-y-2">
-            <label className="text-xs font-bold text-zinc-300 uppercase tracking-wider">Note Generali per il Coach</label>
-            <Textarea 
-              placeholder="Esempio: buone sensazioni sul petto, recupero fluido..."
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-              className="bg-zinc-950 border-zinc-800 text-white rounded-2xl min-h-[100px] text-xs"
-            />
-          </div>
-        </div>
-
-        <div className="space-y-3 pt-4">
-          <Button 
-            className="w-full h-12 bg-emerald-500 hover:bg-emerald-400 text-zinc-950 font-bold text-base rounded-2xl shadow-xl shadow-emerald-500/20" 
-            onClick={finishWorkout}
-          >
-            Salva Allenamento in Cronologia
-          </Button>
-          <Button 
-            variant="ghost" 
-            className="w-full text-zinc-400 hover:text-white" 
-            onClick={() => setWorkoutEnded(false)}
-          >
-            Torna alle Serie
-          </Button>
+            
+            <div className="space-y-4">
+              <label className="font-medium text-lg">Feedback Giornaliero</label>
+              <Textarea 
+                placeholder="Sensazioni a caldo scritte durante il workout..."
+                value={dailyFeedback}
+                onChange={(e) => setDailyFeedback(e.target.value)}
+                className="min-h-[100px] border-primary/50"
+              />
+            </div>
+          </CardContent>
+        </Card>
+        
+        <div className="mt-8 space-y-4">
+          <Button className="w-full h-14 text-lg premium-button-primary" onClick={finishWorkout}>Salva Allenamento</Button>
+          <Button variant="outline" className="w-full border-white/20 text-white hover:bg-white/10" onClick={() => setWorkoutEnded(false)}>Torna indietro</Button>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-[#0c0e12] text-zinc-100 flex flex-col pb-28" data-testid="workout-mode">
-      
-      {/* Top Header */}
-      <header className="sticky top-0 z-40 bg-[#0c0e12]/90 border-b border-zinc-800/80 backdrop-blur-xl p-4 flex justify-between items-center">
+    <div className="min-h-screen flex flex-col pb-24" data-testid="workout-mode">
+      {/* Header Sticky */}
+      <header className="sticky top-0 z-40 glass-card border-b-0 p-4 flex justify-between items-center text-slate-50">
         <div className="flex items-center gap-3">
-          <Button 
-            variant="ghost" 
-            size="icon" 
-            onClick={() => navigate('/athlete')} 
-            className="h-9 w-9 text-zinc-400 hover:text-white hover:bg-zinc-800 rounded-xl"
-          >
+          <Button variant="ghost" size="icon" onClick={() => navigate('/athlete')} className="shrink-0 hover:bg-white/10 text-slate-50">
             <ArrowLeft className="h-5 w-5" />
           </Button>
           <div>
-            <h1 className="font-bold text-sm text-white leading-tight">{session.dayName}</h1>
-            <p className="text-[11px] text-zinc-400">
-              Esercizio {activeExerciseIndex + 1} di {session.exercises.length}
-            </p>
+            <h1 className="font-bold leading-tight">{session.dayName}</h1>
+            <p className="text-sm text-muted-foreground">Esercizio {activeExerciseIndex + 1} di {session.exercises.length}</p>
           </div>
         </div>
+        
+        <div className="flex items-center gap-2">
+          {/* Calculator Icon */}
+          <Dialog>
+            <DialogTrigger asChild>
+              <Button variant="outline" size="icon" className="shrink-0 rounded-full">
+                <Dumbbell className="h-4 w-4 text-primary" />
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="sm:max-w-md">
+              <Calculator />
+            </DialogContent>
+          </Dialog>
 
-        {prDetected && (
-          <span className="hidden sm:flex items-center gap-1 px-2.5 py-1 rounded-full bg-amber-500/10 text-amber-400 border border-amber-500/20 text-[10px] font-bold">
-            <Trophy className="h-3 w-3" /> PR Raggiunto
-          </span>
-        )}
+          {/* Toolbox Icon */}
+          <Dialog>
+            <DialogTrigger asChild>
+              <Button variant="outline" size="icon" className="shrink-0 rounded-full">
+                <Settings2 className="h-4 w-4 text-primary" />
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="sm:max-w-md p-0 border-none bg-transparent shadow-none">
+              <WorkoutToolbox />
+            </DialogContent>
+          </Dialog>
+        </div>
       </header>
 
-      {/* Main Exercise Set Logging Area */}
-      <main className="flex-1 max-w-3xl w-full mx-auto p-4 space-y-6">
-        
-        {/* Exercise Info Card */}
-        <div className="bg-zinc-900/80 border border-zinc-800 p-5 rounded-3xl space-y-3">
-          <div className="flex items-start justify-between">
-            <div>
-              <span className="text-[10px] font-bold uppercase tracking-wider bg-emerald-500/10 text-emerald-400 px-2 py-0.5 rounded border border-emerald-500/20">
-                Target: {activeExercise.targetSets} Serie × {activeExercise.targetReps} reps
-              </span>
-              <h2 className="text-xl font-extrabold text-white mt-1.5">{activeExercise.name}</h2>
-            </div>
-            <span className="text-xs font-mono font-semibold text-indigo-400 bg-indigo-500/10 px-2.5 py-1 rounded-xl border border-indigo-500/20">
-              RPE {activeExercise.targetRpe}
-            </span>
-          </div>
-
-          <div className="flex items-center justify-between text-xs text-zinc-400 pt-2 border-t border-zinc-800/80">
-            <span>Ultimo carico registrato:</span>
-            <span className="font-mono font-bold text-zinc-200">{activeExercise.lastWeight} kg</span>
-          </div>
+      {/* Main Content */}
+      <main className="flex-1 p-4 text-slate-50">
+        <h2 className="text-3xl font-bold font-heading mb-2 drop-shadow-md">{activeExercise.name}</h2>
+        <div className="flex gap-2 mb-6">
+          <span className="px-2 py-1 bg-sky-500/20 border border-sky-500/30 text-sky-300 text-xs rounded-md font-medium">Obiettivo: {activeExercise.targetReps} reps</span>
+          <span className="px-2 py-1 bg-purple-500/20 border border-purple-500/30 text-purple-300 text-xs rounded-md font-medium">RPE {activeExercise.targetRpe}</span>
         </div>
 
-        {/* Set Logger Table */}
-        <div className="bg-zinc-900/60 border border-zinc-800 p-4 rounded-3xl space-y-3">
-          <div className="grid grid-cols-[40px_1fr_1fr_56px] gap-2 px-2 text-[11px] font-bold text-zinc-400 uppercase tracking-wider">
+        <div className="space-y-3">
+          {/* Header Righe */}
+          <div className="grid grid-cols-[30px_1fr_1fr_60px] gap-2 px-2 text-xs font-semibold text-slate-400 uppercase tracking-wider">
             <div className="text-center">Set</div>
-            <div className="text-center">Kg</div>
-            <div className="text-center">Reps</div>
-            <div className="text-center">Stato</div>
+            <div>Kg</div>
+            <div>Reps</div>
+            <div className="text-center">Fatto</div>
           </div>
 
+          {/* Righe dei Set */}
           {Array.from({ length: activeExercise.targetSets }).map((_, i) => {
             const key = `${activeExercise.id}-${i}`;
-            const log = setLogs[key] || { weight: activeExercise.lastWeight, reps: activeExercise.targetReps.split('-')[0], completed: false };
+            const log = setLogs[key] || { weight: '', reps: '', completed: false };
             
             return (
               <div 
                 key={i} 
-                className={`grid grid-cols-[40px_1fr_1fr_56px] gap-2 items-center p-2 rounded-2xl transition-all ${
-                  log.completed 
-                    ? 'bg-emerald-950/30 border border-emerald-500/40 shadow-sm shadow-emerald-500/10' 
-                    : 'bg-zinc-950 border border-zinc-800'
+                className={`grid grid-cols-[30px_1fr_1fr_60px] gap-2 items-center p-2 rounded-xl transition-all duration-300 ${
+                  log.completed ? 'glass-card glow-blue' : 'glass-card'
                 }`}
               >
-                <div className="text-center font-mono font-bold text-zinc-400 text-xs">{i + 1}</div>
-                
+                <div className="text-center font-mono font-bold text-slate-400">{i + 1}</div>
                 <Input 
-                  type="number" 
-                  inputMode="decimal"
-                  placeholder={activeExercise.lastWeight}
-                  className="h-11 text-center font-bold text-sm bg-zinc-900 border-zinc-800 text-white rounded-xl focus:border-emerald-500"
-                  value={log.weight || ''}
+                  type="number" inputMode="decimal"
+                  placeholder="Kg" 
+                  className={`h-12 text-lg text-center font-bold bg-slate-900/50 border-slate-700/50 text-slate-100 ${log.completed && 'bg-transparent border-none shadow-none text-sky-300'}`}
+                  value={log.weight}
                   onChange={(e) => handleSetChange(activeExercise.id, i, 'weight', e.target.value)}
+                  disabled={log.completed}
                 />
-
                 <Input 
-                  type="number" 
-                  inputMode="numeric"
-                  placeholder={activeExercise.targetReps.split('-')[0]}
-                  className="h-11 text-center font-bold text-sm bg-zinc-900 border-zinc-800 text-white rounded-xl focus:border-emerald-500"
-                  value={log.reps || ''}
+                  type="number" inputMode="numeric"
+                  placeholder="Reps" 
+                  className={`h-12 text-lg text-center font-bold bg-slate-900/50 border-slate-700/50 text-slate-100 ${log.completed && 'bg-transparent border-none shadow-none text-sky-300'}`}
+                  value={log.reps}
                   onChange={(e) => handleSetChange(activeExercise.id, i, 'reps', e.target.value)}
+                  disabled={log.completed}
                 />
-
                 <Button 
                   size="icon"
-                  className={`h-11 w-full rounded-xl transition-all font-bold ${
-                    log.completed 
-                      ? 'bg-emerald-500 hover:bg-emerald-400 text-zinc-950 shadow-md shadow-emerald-500/20' 
-                      : 'bg-zinc-800 hover:bg-zinc-700 text-zinc-400'
-                  }`}
+                  className={`h-12 w-full rounded-lg active-scale transition-colors ${log.completed ? 'bg-sky-500 hover:bg-sky-400 text-slate-900 shadow-[0_0_15px_rgba(56,189,248,0.5)]' : 'bg-slate-800 text-slate-400 hover:bg-slate-700'}`}
                   onClick={() => toggleSetComplete(activeExercise.id, i)}
                 >
-                  <Check className={`h-5 w-5 ${log.completed ? 'stroke-[3]' : ''}`} />
+                  <Check className={`h-6 w-6 ${log.completed ? 'text-slate-900' : ''}`} />
                 </Button>
               </div>
             );
           })}
         </div>
 
-        {/* Exercise Notes */}
-        <div className="space-y-2">
-          <label className="text-xs font-bold text-zinc-400 uppercase tracking-wider px-1">Note per questo esercizio</label>
+        <div className="mt-8 space-y-3">
+          <label className="text-sm font-semibold text-slate-400 uppercase tracking-wider px-2">Note Esercizio</label>
           <Textarea 
-            placeholder={`Aggiungi dettagli sull'esecuzione di ${activeExercise.name}...`}
-            value={exerciseNotes[activeExercise.id] || ""}
-            onChange={(e) => setExerciseNotes(prev => ({ ...prev, [activeExercise.id]: e.target.value }))}
-            className="bg-zinc-900 border-zinc-800 text-white rounded-2xl min-h-[80px] text-xs"
+            placeholder={`Scrivi qui note o sensazioni per ${activeExercise.name}...`}
+            value={exerciseFeedback[activeExercise.id] || ""}
+            onChange={(e) => setExerciseFeedback(prev => ({ ...prev, [activeExercise.id]: e.target.value }))}
+            className="min-h-[100px] glass-card bg-transparent border-slate-700/50 focus-visible:ring-sky-500/50"
           />
         </div>
-
       </main>
 
-      {/* Floating Rest Timer Bar & Step Navigation */}
-      <div className="fixed bottom-0 left-0 right-0 z-50 bg-[#0c0e12]/95 border-t border-zinc-800/80 backdrop-blur-xl p-4">
-        <div className="max-w-md mx-auto flex items-center justify-between gap-3">
+      {/* Floating Timer & Navigation */}
+      <div className="fixed bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-[#020617] via-[#020617]/90 to-transparent pt-12 pb-6 z-50">
+        <div className="max-w-md mx-auto flex items-end justify-between gap-4">
           
           <Button 
             variant="outline" 
             size="icon" 
-            className="h-12 w-12 rounded-2xl bg-zinc-900 border-zinc-800 text-zinc-300 hover:text-white shrink-0"
+            className="h-14 w-14 rounded-full shrink-0 shadow-md glass-card text-white hover:bg-white/10 active-scale"
             onClick={() => setActiveExerciseIndex(prev => Math.max(0, prev - 1))}
             disabled={activeExerciseIndex === 0}
           >
-            <ChevronLeft className="h-5 w-5" />
+            <ChevronLeft className="h-6 w-6" />
           </Button>
 
           {isResting ? (
-            <div className="flex-1 flex items-center justify-between bg-zinc-900 border border-emerald-500/40 p-2 px-3 rounded-2xl shadow-lg shadow-emerald-500/10">
-              <div className="flex items-center gap-2">
-                <Clock className="h-4 w-4 text-emerald-400 animate-spin" />
-                <span className="font-mono font-bold text-lg text-emerald-400">
-                  {formatTime(restTimer)}
-                </span>
-              </div>
-              <div className="flex items-center gap-1">
-                <Button size="icon" variant="ghost" onClick={() => addRestTime(30)} className="h-8 w-8 text-xs text-zinc-300 bg-zinc-800 rounded-lg">
-                  +30s
-                </Button>
-                <Button size="icon" variant="ghost" onClick={() => setIsResting(false)} className="h-8 w-8 text-rose-400 hover:bg-rose-500/10 rounded-lg">
-                  <X className="h-4 w-4" />
-                </Button>
-              </div>
-            </div>
-          ) : (
             <Button 
-              variant="outline"
-              onClick={() => { setRestTimer(90); setIsResting(true); }}
-              className="flex-1 h-12 bg-zinc-900 border-zinc-800 text-zinc-300 hover:text-white rounded-2xl text-xs font-semibold gap-2"
+              className="flex-1 h-16 rounded-2xl text-2xl font-bold font-mono premium-button-primary animate-pulse active-scale"
+              onClick={() => setIsResting(false)}
             >
-              <Clock className="h-4 w-4 text-emerald-400" /> Avvia Timer (90s)
+              <Clock className="h-6 w-6 mr-3" />
+              {formatTime(restTimer)}
             </Button>
+          ) : (
+            <div className="flex-1 h-16"></div> /* Spaziatore vuoto */
           )}
 
           {activeExerciseIndex < session.exercises.length - 1 ? (
             <Button 
               size="icon" 
-              className="h-12 w-12 rounded-2xl bg-zinc-900 border-zinc-800 text-zinc-300 hover:text-white shrink-0"
+              className="h-14 w-14 rounded-full shrink-0 shadow-md glass-card text-white hover:bg-white/10 active-scale"
               onClick={() => setActiveExerciseIndex(prev => Math.min(session.exercises.length - 1, prev + 1))}
             >
-              <ChevronRight className="h-5 w-5" />
+              <ChevronRight className="h-6 w-6" />
             </Button>
           ) : (
             <Button 
-              className="h-12 px-5 bg-emerald-500 hover:bg-emerald-400 text-zinc-950 font-bold text-sm rounded-2xl shrink-0 shadow-lg shadow-emerald-500/20"
-              onClick={() => setWorkoutEnded(true)}
+              className="h-14 px-6 rounded-full shrink-0 premium-button-primary active-scale font-bold text-lg"
+              onClick={endWorkoutTrigger}
             >
               Fine
             </Button>
@@ -350,7 +306,6 @@ export default function WorkoutMode() {
 
         </div>
       </div>
-
     </div>
   );
 }

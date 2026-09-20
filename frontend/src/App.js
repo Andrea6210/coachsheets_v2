@@ -9,7 +9,6 @@ import Landing from "@/pages/Landing";
 import AuthPage from "@/pages/AuthPage";
 import ChatPage from "@/pages/ChatPage";
 import ProgressPage from "@/pages/ProgressPage";
-import ExerciseLibrary from "@/pages/ExerciseLibrary";
 
 // Coach Features
 import CoachDashboard from "@/features/coach/CoachDashboard";
@@ -27,7 +26,7 @@ function App() {
   return (
     <ThemeProvider>
       <AuthProvider>
-        <div className="App transition-theme bg-[#0c0e12] min-h-screen text-zinc-100">
+        <div className="App transition-theme premium-bg noise-overlay min-h-screen">
           <BrowserRouter>
             <Routes>
               <Route path="/" element={<Landing />} />
@@ -35,7 +34,6 @@ function App() {
               <Route path="/register" element={<AuthPage mode="register" />} />
               <Route path="/coach" element={<ProtectedRoute><CoachDashboard /></ProtectedRoute>} />
               <Route path="/athlete" element={<ProtectedRoute><AthleteDashboard /></ProtectedRoute>} />
-              <Route path="/esercizi" element={<ProtectedRoute><ExerciseLibrary /></ProtectedRoute>} />
               <Route path="/workout/:sessionId" element={<ProtectedRoute><WorkoutMode /></ProtectedRoute>} />
               <Route path="/sheet/:sheetId" element={<ProtectedRoute><SheetEditor /></ProtectedRoute>} />
               <Route path="/sheet/:sheetId/history" element={<ProtectedRoute><SheetHistory /></ProtectedRoute>} />
