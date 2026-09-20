@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import axios from 'axios';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -9,17 +10,23 @@ import { Calculator } from "@/features/calculator/Calculator";
 import { WorkoutToolbox } from "./WorkoutToolbox";
 import { Dialog, DialogContent, DialogTrigger } from "@/components/ui/dialog";
 import { toast } from 'sonner';
+import { useAuth, API } from "@/contexts/AuthContext";
 
 export default function WorkoutMode() {
   const { sessionId } = useParams();
+  const [searchParams] = useSearchParams();
   const navigate = useNavigate();
-  
+
+  const weekIdParam = searchParams.get("weekId");
+  const dayIdParam = searchParams.get("dayId");
+
+  const [loading, setLoading] = useState(true);
   const [session, setSession] = useState({
-    dayName: "Giorno 1 - Upper Body (Forza)",
+    dayName: "Workout Guidato",
     exercises: [
-      { id: 'e1', name: 'Panca Piana con Bilanciere', targetSets: 4, targetReps: '8', targetRpe: '8', lastWeight: '80' },
-      { id: 'e2', name: 'Trazioni alla Sbarra', targetSets: 3, targetReps: '8-10', targetRpe: '9', lastWeight: 'Corpo Libero' },
-      { id: 'e3', name: 'Military Press', targetSets: 3, targetReps: '10', targetRpe: '8', lastWeight: '45' }
+      { id: 'e1', name: 'Panca Piana con Bilanciere', targetSets: 4, targetReps: '8', targetRpe: '8', lastWeight: '80', rest: '90s' },
+      { id: 'e2', name: 'Trazioni alla Sbarra', targetSets: 3, targetReps: '8-10', targetRpe: '9', lastWeight: 'Corpo Libero', rest: '90s' },
+      { id: 'e3', name: 'Military Press', targetSets: 3, targetReps: '10', targetRpe: '8', lastWeight: '45', rest: '75s' }
     ]
   });
 
@@ -34,7 +41,42 @@ export default function WorkoutMode() {
   const [notes, setNotes] = useState("");
   const [exerciseNotes, setExerciseNotes] = useState({});
 
-  const activeExercise = session.exercises[activeExerciseIndex];
+  useEffect(() => {
+    fetchSessionData();
+  }, [sessionId, weekIdParam, dayIdParam]);
+
+  const fetchSessionData = async () => {
+    try {
+      const res = await axios.get(`${API}/sheets/${sessionId}`);
+      const sheetData = res.data;
+      
+      const targetWeek = (weekIdParam && sheetData.weeks?.find(w => w.id === weekIdParam)) || sheetData.weeks?.[0];
+      const targetDay = (dayIdParam && targetWeek?.days?.find(d => d.id === dayIdParam)) || targetWeek?.days?.[0];
+
+      if (targetDay && targetDay.exercises?.length > 0) {
+        const mappedExercises = targetDay.exercises.map((ex, idx) => ({
+          id: ex.id || `ex_${idx}`,
+          name: ex.exercise || `Esercizio ${idx + 1}`,
+          targetSets: parseInt(ex.sets) || 3,
+          targetReps: ex.reps || "8-10",
+          targetRpe: "8",
+          lastWeight: ex.weight || "0",
+          rest: ex.rest || "90s"
+        }));
+
+        setSession({
+          dayName: `${targetWeek?.label || 'Settimana'} · ${targetDay.name || 'Giorno'}`,
+          exercises: mappedExercises
+        });
+      }
+    } catch (e) {
+      // Fallback a dati guida predefiniti se non si trova la scheda
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const activeExercise = session.exercises[activeExerciseIndex] || session.exercises[0];
 
   // Rest Timer countdown
   useEffect(() => {
@@ -77,13 +119,14 @@ export default function WorkoutMode() {
       ...prev,
       [key]: { 
         weight: current.weight || activeExercise.lastWeight,
-        reps: current.reps || activeExercise.targetReps.split('-')[0],
+        reps: current.reps || String(activeExercise.targetReps).split('-')[0],
         completed: isNowCompleted 
       }
     }));
 
     if (isNowCompleted) {
-      setRestTimer(90);
+      const parsedRestSeconds = parseInt(activeExercise.rest) || 90;
+      setRestTimer(parsedRestSeconds);
       setIsResting(true);
     }
   };
@@ -93,7 +136,7 @@ export default function WorkoutMode() {
   };
 
   const finishWorkout = () => {
-    toast.success("Allenamento salvato con successo nella tua cronologia!");
+    toast.success("Allenamento completato e salvato con successo!");
     navigate('/athlete');
   };
 
@@ -102,6 +145,17 @@ export default function WorkoutMode() {
     const s = seconds % 60;
     return `${m}:${s < 10 ? '0' : ''}${s}`;
   };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-[#0c0e12] flex items-center justify-center">
+        <div className="flex flex-col items-center gap-3">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-emerald-400"></div>
+          <p className="text-xs text-zinc-400 font-mono">Preparazione Workout Guidato...</p>
+        </div>
+      </div>
+    );
+  }
 
   if (workoutEnded) {
     return (
@@ -206,12 +260,12 @@ export default function WorkoutMode() {
               <h2 className="text-xl font-black text-white mt-1.5">{activeExercise.name}</h2>
             </div>
             <span className="text-xs font-mono font-bold text-sky-400 bg-sky-500/10 px-2.5 py-1 rounded-xl border border-sky-500/20">
-              RPE {activeExercise.targetRpe}
+              Recupero {activeExercise.rest || "90s"}
             </span>
           </div>
 
           <div className="flex items-center justify-between text-xs text-zinc-400 pt-2 border-t border-zinc-800/80 font-mono">
-            <span>Ultimo carico registrato:</span>
+            <span>Carico target:</span>
             <span className="font-bold text-emerald-400">{activeExercise.lastWeight} kg</span>
           </div>
         </div>
@@ -227,7 +281,7 @@ export default function WorkoutMode() {
 
           {Array.from({ length: activeExercise.targetSets }).map((_, i) => {
             const key = `${activeExercise.id}-${i}`;
-            const log = setLogs[key] || { weight: activeExercise.lastWeight, reps: activeExercise.targetReps.split('-')[0], completed: false };
+            const log = setLogs[key] || { weight: activeExercise.lastWeight, reps: String(activeExercise.targetReps).split('-')[0], completed: false };
             
             return (
               <div 
@@ -252,7 +306,7 @@ export default function WorkoutMode() {
                 <Input 
                   type="number" 
                   inputMode="numeric"
-                  placeholder={activeExercise.targetReps.split('-')[0]}
+                  placeholder={String(activeExercise.targetReps).split('-')[0]}
                   className="h-11 text-center font-bold text-sm bg-zinc-900 border-zinc-800 text-white rounded-xl focus:border-emerald-500"
                   value={log.reps || ''}
                   onChange={(e) => handleSetChange(activeExercise.id, i, 'reps', e.target.value)}
@@ -321,10 +375,10 @@ export default function WorkoutMode() {
           ) : (
             <Button 
               variant="outline"
-              onClick={() => { setRestTimer(90); setIsResting(true); }}
+              onClick={() => { setRestTimer(parseInt(activeExercise.rest) || 90); setIsResting(true); }}
               className="flex-1 h-12 bg-zinc-900 border-zinc-800 text-zinc-300 hover:text-white rounded-2xl text-xs font-bold gap-2"
             >
-              <Clock className="h-4 w-4 text-emerald-400" /> Avvia Timer (90s)
+              <Clock className="h-4 w-4 text-emerald-400" /> Avvia Recupero ({activeExercise.rest || "90s"})
             </Button>
           )}
 

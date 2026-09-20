@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { 
   Dumbbell, 
   Play, 
@@ -16,7 +17,9 @@ import {
   BookOpen,
   Calendar as CalendarIcon,
   CheckCircle2,
-  Trash2
+  Trash2,
+  ChevronRight,
+  Sparkles
 } from "lucide-react";
 import { useAuth, API } from "@/contexts/AuthContext";
 import { Navbar } from "@/components/layout/Navbar";
@@ -38,11 +41,14 @@ export default function AthleteDashboard() {
     }
   });
 
-  // Days of the week for the weekly activity calendar view
-  const DAYS_OF_WEEK = ["Lun", "Mar", "Mer", "Gio", "Ven", "Sab", "Dom"];
-  
+  // State for Workout Launch Modal (Week / Day Selection)
+  const [selectedSheetForWorkout, setSelectedSheetForWorkout] = useState(null);
+  const [selectedWeekId, setSelectedWeekId] = useState(null);
+  const [selectedDayId, setSelectedDayId] = useState(null);
+  const [workoutModalOpen, setWorkoutModalOpen] = useState(false);
+
   // Weekly calendar schedule overview (current week)
-  const [currentWeekSchedule, setCurrentWeekSchedule] = useState([
+  const [currentWeekSchedule] = useState([
     { day: "Lun", date: "16 Set", status: "Completato", workout: "Upper Body Forza" },
     { day: "Mar", date: "17 Set", status: "Riposo", workout: "-" },
     { day: "Mer", date: "18 Set", status: "Completato", workout: "Lower Body Ipertrofia" },
@@ -76,6 +82,22 @@ export default function AthleteDashboard() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const openWorkoutLaunchModal = (sheet) => {
+    setSelectedSheetForWorkout(sheet);
+    const firstWeek = sheet.weeks?.[0];
+    const firstDay = firstWeek?.days?.[0];
+    setSelectedWeekId(firstWeek?.id || null);
+    setSelectedDayId(firstDay?.id || null);
+    setWorkoutModalOpen(true);
+  };
+
+  const handleStartGuidedWorkout = () => {
+    if (!selectedSheetForWorkout) return;
+    const url = `/workout/${selectedSheetForWorkout.id}?weekId=${selectedWeekId || ''}&dayId=${selectedDayId || ''}`;
+    setWorkoutModalOpen(false);
+    navigate(url);
   };
 
   const handleAddWeight = (e) => {
@@ -118,6 +140,9 @@ export default function AthleteDashboard() {
   const coachRecipientId = user?.coach_id || user?.coachId || "coach";
   const completedWorkoutsThisWeek = currentWeekSchedule.filter(s => s.status === "Completato").length;
 
+  const activeWeekInModal = selectedSheetForWorkout?.weeks?.find(w => w.id === selectedWeekId) || selectedSheetForWorkout?.weeks?.[0];
+  const activeDayInModal = activeWeekInModal?.days?.find(d => d.id === selectedDayId) || activeWeekInModal?.days?.[0];
+
   return (
     <div className="min-h-screen bg-[#0c0e12] text-zinc-100 pb-20 md:pb-8">
       <Navbar />
@@ -128,7 +153,7 @@ export default function AthleteDashboard() {
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 bg-gradient-to-r from-zinc-900 via-zinc-900/90 to-zinc-950 border border-emerald-500/20 p-6 rounded-3xl shadow-2xl glow-emerald">
           <div className="space-y-1">
             <div className="flex items-center gap-2">
-              <span className="px-2.5 py-0.5 rounded-full text-[11px] font-black uppercase tracking-wider bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
+              <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
                 Atleta Attivo
               </span>
               <span className="text-xs text-zinc-400 font-mono">CoachSheets Platform</span>
@@ -220,7 +245,7 @@ export default function AthleteDashboard() {
                       Dettagli Scheda
                     </Button>
                     <Button
-                      onClick={() => navigate(`/workout/${sheet.id}`)}
+                      onClick={() => openWorkoutLaunchModal(sheet)}
                       size="sm"
                       className="premium-button-primary gap-1.5 rounded-xl px-4 py-2 text-xs font-black shadow-lg shadow-emerald-500/25"
                     >
@@ -384,6 +409,104 @@ export default function AthleteDashboard() {
         </div>
 
       </main>
+
+      {/* Workout Launch Modal (Choose Week & Day before starting) */}
+      <Dialog open={workoutModalOpen} onOpenChange={setWorkoutModalOpen}>
+        <DialogContent className="bg-zinc-950 border-zinc-800 text-white rounded-3xl max-w-lg p-6">
+          <DialogHeader>
+            <div className="flex items-center gap-2">
+              <span className="p-2 rounded-xl bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                <Dumbbell className="h-5 w-5" />
+              </span>
+              <div>
+                <DialogTitle className="text-lg font-black text-white">
+                  Seleziona Sessione di Allenamento
+                </DialogTitle>
+                <p className="text-xs text-zinc-400 mt-0.5">
+                  Scegli la settimana ed il giorno per avviare il workout guidato
+                </p>
+              </div>
+            </div>
+          </DialogHeader>
+
+          {selectedSheetForWorkout && (
+            <div className="space-y-5 py-3">
+              {/* Select Week */}
+              <div className="space-y-2">
+                <label className="text-xs font-bold text-zinc-400 uppercase tracking-wider">1. Seleziona Settimana</label>
+                <div className="flex flex-wrap gap-2">
+                  {(selectedSheetForWorkout.weeks || [{ id: 'w1', label: 'Settimana 1' }]).map((week) => (
+                    <button
+                      key={week.id}
+                      onClick={() => {
+                        setSelectedWeekId(week.id);
+                        setSelectedDayId(week.days?.[0]?.id || null);
+                      }}
+                      className={`text-xs px-3.5 py-2 rounded-xl transition-all font-bold ${
+                        selectedWeekId === week.id
+                          ? "bg-emerald-500 text-zinc-950 shadow-md shadow-emerald-500/20"
+                          : "bg-zinc-900 text-zinc-300 hover:bg-zinc-800 border border-zinc-800"
+                      }`}
+                    >
+                      {week.label || "Settimana"}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Select Day */}
+              <div className="space-y-2">
+                <label className="text-xs font-bold text-zinc-400 uppercase tracking-wider">2. Seleziona Giorno di Allenamento</label>
+                <div className="space-y-1.5">
+                  {(activeWeekInModal?.days || [{ id: 'd1', name: 'Giorno 1 - Upper Body', exercises: [] }]).map((day) => (
+                    <button
+                      key={day.id}
+                      onClick={() => setSelectedDayId(day.id)}
+                      className={`w-full flex items-center justify-between p-3 rounded-2xl transition-all text-left border ${
+                        selectedDayId === day.id
+                          ? "bg-zinc-900 border-emerald-500/60 text-white shadow-md shadow-emerald-500/10"
+                          : "bg-zinc-900/60 border-zinc-800/80 text-zinc-400 hover:bg-zinc-900 hover:text-zinc-200"
+                      }`}
+                    >
+                      <div>
+                        <p className="text-xs font-bold text-white">{day.name || "Giorno"}</p>
+                        <p className="text-[11px] text-zinc-400 mt-0.5 font-mono">
+                          {day.exercises?.length || 0} Esercizi in programma
+                        </p>
+                      </div>
+                      <ChevronRight className={`h-4 w-4 ${selectedDayId === day.id ? 'text-emerald-400' : 'text-zinc-600'}`} />
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Preview of exercises for selected day */}
+              {activeDayInModal && activeDayInModal.exercises && activeDayInModal.exercises.length > 0 && (
+                <div className="bg-zinc-900/80 border border-zinc-800 p-3 rounded-2xl space-y-2">
+                  <p className="text-[10px] font-bold uppercase text-zinc-400 tracking-wider">Esercizi in questa sessione:</p>
+                  <div className="flex flex-wrap gap-1">
+                    {activeDayInModal.exercises.map((ex, idx) => (
+                      <span key={idx} className="text-[11px] bg-zinc-950 text-emerald-400 px-2.5 py-1 rounded-lg border border-zinc-800 font-medium">
+                        {ex.exercise || "Esercizio"} ({ex.sets || 3}x{ex.reps || 8})
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          <DialogFooter>
+            <Button
+              onClick={handleStartGuidedWorkout}
+              className="w-full premium-button-primary rounded-2xl text-sm font-black py-3 shadow-xl shadow-emerald-500/25"
+            >
+              <Play className="h-4 w-4 mr-2 fill-current" /> Avvia Sessione Guidata
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
     </div>
   );
 }

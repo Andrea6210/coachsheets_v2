@@ -10,7 +10,7 @@ import {
   Home, 
   BookOpen, 
   Settings2,
-  Sparkles
+  User
 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { Calculator } from "@/features/calculator/Calculator";
@@ -28,6 +28,7 @@ export const Navbar = () => {
 
   const navItems = isAthlete ? [
     { label: "Home", icon: Home, path: "/athlete" },
+    { label: "Atleta", icon: User, path: "/atleta-profilo" },
     { label: "Esercizi", icon: BookOpen, path: "/esercizi" },
     { label: "Progressi", icon: TrendingUp, path: "/progressi" },
     { label: "Chat", icon: MessageSquare, path: `/chat/${user.coachId || user.coach_id || 'coach'}` },
@@ -45,7 +46,7 @@ export const Navbar = () => {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-16">
             
-            {/* Logo and Brand with Vibrant Neon Accent */}
+            {/* Logo and Brand */}
             <div className="flex items-center gap-6">
               <button 
                 onClick={() => navigate(homePath)}
@@ -94,7 +95,7 @@ export const Navbar = () => {
                   {/* Calculator Tool */}
                   <Dialog>
                     <DialogTrigger asChild>
-                      <Button variant="ghost" size="icon" className="h-8 w-8 text-sky-400 hover:bg-sky-500/10 rounded-xl" title="Calcolatore 1RM">
+                      <Button variant="ghost" size="icon" className="h-8 w-8 text-emerald-400 hover:bg-emerald-500/10 rounded-xl" title="Calcolatore 1RM">
                         <Dumbbell className="h-4 w-4" />
                       </Button>
                     </DialogTrigger>
@@ -140,8 +141,16 @@ export const Navbar = () => {
                     <Home className="h-4 w-4 text-emerald-400" />
                     Dashboard
                   </DropdownMenuItem>
+                  
+                  {isAthlete && (
+                    <DropdownMenuItem onClick={() => navigate("/atleta-profilo")} className="gap-2 cursor-pointer focus:bg-zinc-900 text-zinc-300 font-medium">
+                      <User className="h-4 w-4 text-emerald-400" />
+                      Profilo Atleta
+                    </DropdownMenuItem>
+                  )}
+
                   <DropdownMenuItem onClick={() => navigate("/esercizi")} className="gap-2 cursor-pointer focus:bg-zinc-900 text-zinc-300 font-medium">
-                    <BookOpen className="h-4 w-4 text-sky-400" />
+                    <BookOpen className="h-4 w-4 text-emerald-400" />
                     Libreria Esercizi
                   </DropdownMenuItem>
                   <DropdownMenuItem onClick={() => navigate("/progressi")} className="gap-2 cursor-pointer focus:bg-zinc-900 text-zinc-300 font-medium">
@@ -163,7 +172,7 @@ export const Navbar = () => {
         </div>
       </header>
 
-      {/* Bottom Navigation Bar for Mobile with Vibrant Neon Highlights */}
+      {/* Bottom Navigation Bar for Mobile */}
       <div className="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-[#0c0e12]/95 border-t border-zinc-800/80 backdrop-blur-xl px-2 py-2">
         <div className="flex items-center justify-around max-w-md mx-auto">
           {navItems.map((item) => {
