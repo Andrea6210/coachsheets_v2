@@ -200,24 +200,48 @@ code {
 }
 
 .glow-blue {
-    box-shadow: 0 0 15px rgba(56, 189, 248, 0.4);
+    box-shadow: 0 0 18px rgba(56, 189, 248, 0.35);
     border-color: rgba(56, 189, 248, 0.5);
 }
 
+.glow-emerald {
+    box-shadow: 0 0 18px rgba(16, 185, 129, 0.35);
+    border-color: rgba(16, 185, 129, 0.5);
+}
+
+.glow-purple {
+    box-shadow: 0 0 18px rgba(168, 85, 247, 0.35);
+    border-color: rgba(168, 85, 247, 0.5);
+}
+
+.glow-amber {
+    box-shadow: 0 0 18px rgba(245, 158, 11, 0.35);
+    border-color: rgba(245, 158, 11, 0.5);
+}
+
 .glow-text {
-    text-shadow: 0 0 10px rgba(56, 189, 248, 0.6);
+    text-shadow: 0 0 12px rgba(16, 185, 129, 0.7);
+}
+
+.glow-text-blue {
+    text-shadow: 0 0 12px rgba(56, 189, 248, 0.7);
+}
+
+.glow-text-emerald {
+    text-shadow: 0 0 12px rgba(16, 185, 129, 0.8);
 }
 
 .premium-button-primary {
-    background: linear-gradient(135deg, #38bdf8 0%, #818cf8 100%);
-    color: white;
+    background: linear-gradient(135deg, #10b981 0%, #38bdf8 100%);
+    color: #0c0e12;
+    font-weight: 800;
     border: none;
-    box-shadow: 0 4px 15px rgba(56, 189, 248, 0.3);
+    box-shadow: 0 4px 20px rgba(16, 185, 129, 0.35);
     transition: all 0.3s ease;
 }
 
 .premium-button-primary:hover {
-    box-shadow: 0 6px 20px rgba(56, 189, 248, 0.5);
+    box-shadow: 0 6px 25px rgba(16, 185, 129, 0.55);
     transform: translateY(-2px);
 }
 
