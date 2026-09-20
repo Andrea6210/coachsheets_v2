@@ -259,7 +259,7 @@ export default function WorkoutMode() {
               </span>
               <h2 className="text-xl font-black text-white mt-1.5">{activeExercise.name}</h2>
             </div>
-            <span className="text-xs font-mono font-bold text-sky-400 bg-sky-500/10 px-2.5 py-1 rounded-xl border border-sky-500/20">
+            <span className="text-xs font-mono font-bold text-emerald-400 bg-emerald-500/10 px-2.5 py-1 rounded-xl border border-emerald-500/20">
               Recupero {activeExercise.rest || "90s"}
             </span>
           </div>

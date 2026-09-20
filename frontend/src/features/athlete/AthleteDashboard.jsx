@@ -10,7 +10,6 @@ import {
   Dumbbell, 
   Play, 
   Activity, 
-  Flame, 
   MessageSquare, 
   Plus, 
   Scale, 
@@ -19,7 +18,7 @@ import {
   CheckCircle2,
   Trash2,
   ChevronRight,
-  Sparkles
+  Info
 } from "lucide-react";
 import { useAuth, API } from "@/contexts/AuthContext";
 import { Navbar } from "@/components/layout/Navbar";
@@ -31,10 +30,24 @@ export default function AthleteDashboard() {
   const [loading, setLoading] = useState(true);
   const [quickWeight, setQuickWeight] = useState("");
   
-  // Real user weight logs initialized from localStorage (default empty)
+  const displayName = user?.name && user.name !== "Utente"
+    ? user.name 
+    : (user?.username || (user?.email ? user.email.split('@')[0] : "Atleta"));
+
+  // Real user weight logs from localStorage
   const [weightLogs, setWeightLogs] = useState(() => {
     try {
       const saved = localStorage.getItem(`coachsheets_weight_logs_${user?.id || 'guest'}`);
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
+
+  // Real completed workout logs from localStorage
+  const [completedWorkouts] = useState(() => {
+    try {
+      const saved = localStorage.getItem(`coachsheets_completed_workouts_${user?.id || 'guest'}`);
       return saved ? JSON.parse(saved) : [];
     } catch {
       return [];
@@ -46,28 +59,6 @@ export default function AthleteDashboard() {
   const [selectedWeekId, setSelectedWeekId] = useState(null);
   const [selectedDayId, setSelectedDayId] = useState(null);
   const [workoutModalOpen, setWorkoutModalOpen] = useState(false);
-
-  // Weekly calendar schedule overview (current week)
-  const [currentWeekSchedule] = useState([
-    { day: "Lun", date: "16 Set", status: "Completato", workout: "Upper Body Forza" },
-    { day: "Mar", date: "17 Set", status: "Riposo", workout: "-" },
-    { day: "Mer", date: "18 Set", status: "Completato", workout: "Lower Body Ipertrofia" },
-    { day: "Gio", date: "19 Set", status: "Riposo", workout: "-" },
-    { day: "Ven", date: "20 Set", status: "In Programma", workout: "Push / Pull" },
-    { day: "Sab", date: "21 Set", status: "In Programma", workout: "Richiamo Braccia" },
-    { day: "Dom", date: "22 Set", status: "Riposo", workout: "-" },
-  ]);
-
-  // Muscle Fatigue Map data
-  const muscleFatigue = [
-    { name: "Petto", level: "Recuperato", percent: 100, color: "text-emerald-400 bg-emerald-500/10 border-emerald-500/30" },
-    { name: "Dorso", level: "In Recupero", percent: 70, color: "text-sky-400 bg-sky-500/10 border-sky-500/30" },
-    { name: "Gambe", level: "Recuperato", percent: 90, color: "text-emerald-400 bg-emerald-500/10 border-emerald-500/30" },
-    { name: "Spalle", level: "Recuperato", percent: 100, color: "text-emerald-400 bg-emerald-500/10 border-emerald-500/30" },
-    { name: "Bicipiti", level: "In Recupero", percent: 65, color: "text-sky-400 bg-sky-500/10 border-sky-500/30" },
-    { name: "Tricipiti", level: "Recuperato", percent: 95, color: "text-emerald-400 bg-emerald-500/10 border-emerald-500/30" },
-    { name: "Core", level: "Recuperato", percent: 100, color: "text-emerald-400 bg-emerald-500/10 border-emerald-500/30" },
-  ];
 
   useEffect(() => {
     fetchSheets();
@@ -83,6 +74,92 @@ export default function AthleteDashboard() {
       setLoading(false);
     }
   };
+
+  // Build current week schedule dynamically without hardcoded fake completions
+  const getCurrentWeekSchedule = () => {
+    const today = new Date();
+    const dayOfWeek = today.getDay(); // 0 is Sun, 1 is Mon
+    const distanceToMon = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
+    const monday = new Date(today);
+    monday.setDate(today.getDate() + distanceToMon);
+
+    const dayLabels = ["LUN", "MAR", "MER", "GIO", "VEN", "SAB", "DOM"];
+
+    return dayLabels.map((label, index) => {
+      const d = new Date(monday);
+      d.setDate(monday.getDate() + index);
+      const dateStr = d.toLocaleDateString('it-IT', { day: '2-digit', month: 'short' });
+      const isoStr = d.toISOString().split('T')[0];
+
+      // Check if user completed a workout on this date
+      const isDone = completedWorkouts.some(cw => cw.date === isoStr || cw.dateStr === dateStr);
+
+      // Check if sheet schedules a workout on this weekday (e.g., Lun, Mer, Ven)
+      const isScheduled = index === 0 || index === 2 || index === 4;
+
+      let status = "Riposo";
+      if (isDone) {
+        status = "Completato";
+      } else if (isScheduled) {
+        status = "In Programma";
+      }
+
+      return {
+        day: label,
+        date: dateStr,
+        status: status
+      };
+    });
+  };
+
+  const currentWeekSchedule = getCurrentWeekSchedule();
+  const completedWorkoutsThisWeek = currentWeekSchedule.filter(s => s.status === "Completato").length;
+
+  // Compute muscle recovery dynamically based on recent completed workouts (last 48 hours)
+  const computeMuscleRecovery = () => {
+    const muscles = [
+      { name: "Petto", group: "Petto" },
+      { name: "Dorso", group: "Dorso" },
+      { name: "Gambe", group: "Gambe" },
+      { name: "Spalle", group: "Spalle" },
+      { name: "Bicipiti", group: "Bicipiti" },
+      { name: "Tricipiti", group: "Tricipiti" },
+      { name: "Core", group: "Core" }
+    ];
+
+    const now = Date.now();
+    const recentWorkouts = completedWorkouts.filter(w => {
+      const wTime = new Date(w.timestamp || w.date).getTime();
+      return (now - wTime) < (48 * 3600 * 1000); // within 48h
+    });
+
+    const trainedGroups = new Set();
+    recentWorkouts.forEach(w => {
+      if (w.trainedMuscles) {
+        w.trainedMuscles.forEach(m => trainedGroups.add(m));
+      }
+    });
+
+    return muscles.map(m => {
+      const isRecovering = trainedGroups.has(m.group);
+      if (isRecovering) {
+        return {
+          name: m.name,
+          level: "In Recupero",
+          percent: 70,
+          color: "text-amber-400 bg-amber-500/10 border-amber-500/30"
+        };
+      }
+      return {
+        name: m.name,
+        level: "Recuperato",
+        percent: 100,
+        color: "text-emerald-400 bg-emerald-500/10 border-emerald-500/30"
+      };
+    });
+  };
+
+  const muscleFatigue = computeMuscleRecovery();
 
   const openWorkoutLaunchModal = (sheet) => {
     setSelectedSheetForWorkout(sheet);
@@ -138,8 +215,6 @@ export default function AthleteDashboard() {
   }
 
   const coachRecipientId = user?.coach_id || user?.coachId || "coach";
-  const completedWorkoutsThisWeek = currentWeekSchedule.filter(s => s.status === "Completato").length;
-
   const activeWeekInModal = selectedSheetForWorkout?.weeks?.find(w => w.id === selectedWeekId) || selectedSheetForWorkout?.weeks?.[0];
   const activeDayInModal = activeWeekInModal?.days?.find(d => d.id === selectedDayId) || activeWeekInModal?.days?.[0];
 
@@ -159,7 +234,7 @@ export default function AthleteDashboard() {
               <span className="text-xs text-zinc-400 font-mono">CoachSheets Platform</span>
             </div>
             <h1 className="text-2xl sm:text-4xl font-heading font-black tracking-tight text-white">
-              Bentornato, {user?.name || "Atleta"} <span className="glow-text">⚡</span>
+              Bentornato, {displayName} <span className="glow-text">⚡</span>
             </h1>
             <p className="text-sm text-zinc-300">
               Controlla la tua programmazione settimanale, registra il tuo peso ed avvia il workout.
@@ -172,8 +247,16 @@ export default function AthleteDashboard() {
               variant="outline"
               className="bg-zinc-900 border-zinc-700 text-zinc-200 hover:bg-zinc-800 hover:text-white gap-2 rounded-2xl text-xs font-bold"
             >
-              <MessageSquare className="h-4 w-4 text-sky-400" />
+              <MessageSquare className="h-4 w-4 text-emerald-400" />
               Chat Coach
+            </Button>
+            <Button
+              onClick={() => navigate("/atleta-profilo")}
+              variant="outline"
+              className="bg-zinc-900 border-zinc-700 text-zinc-200 hover:bg-zinc-800 hover:text-white gap-2 rounded-2xl text-xs font-bold"
+            >
+              <Activity className="h-4 w-4 text-emerald-400" />
+              Profilo Atleta
             </Button>
             <Button
               onClick={() => navigate("/esercizi")}
@@ -219,7 +302,7 @@ export default function AthleteDashboard() {
                 >
                   <div className="space-y-3">
                     <div className="flex items-start justify-between">
-                      <span className="text-[10px] font-black uppercase tracking-wider px-2.5 py-0.5 rounded-md bg-sky-500/10 text-sky-400 border border-sky-500/20">
+                      <span className="text-[10px] font-black uppercase tracking-wider px-2.5 py-0.5 rounded-md bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
                         Scheda Attiva
                       </span>
                       <span className="text-[11px] text-zinc-400 font-mono font-bold">
@@ -270,11 +353,11 @@ export default function AthleteDashboard() {
                 </span>
                 <div>
                   <h3 className="text-base font-bold text-white">Programmazione Settimanale</h3>
-                  <p className="text-xs text-zinc-400">Stato degli allenamenti di questa settimana</p>
+                  <p className="text-xs text-zinc-400">Stato reale degli allenamenti di questa settimana</p>
                 </div>
               </div>
               <span className="text-xs font-mono font-black text-emerald-400 bg-emerald-500/10 px-3 py-1 rounded-xl border border-emerald-500/20">
-                {completedWorkoutsThisWeek} / 3 Sessioni Completate
+                {completedWorkoutsThisWeek} Sessioni Completate
               </span>
             </div>
 
@@ -287,7 +370,7 @@ export default function AthleteDashboard() {
                     item.status === "Completato"
                       ? "bg-emerald-950/40 border-emerald-500/50 text-emerald-300 shadow-md shadow-emerald-500/10"
                       : item.status === "In Programma"
-                      ? "bg-zinc-950 border-sky-500/40 text-sky-300"
+                      ? "bg-zinc-950 border-emerald-500/30 text-emerald-400"
                       : "bg-zinc-950/60 border-zinc-800/80 text-zinc-500"
                   }`}
                 >
@@ -302,7 +385,7 @@ export default function AthleteDashboard() {
                         <CheckCircle2 className="h-3 w-3" /> Fatto
                       </span>
                     ) : item.status === "In Programma" ? (
-                      <span className="inline-block text-[10px] font-bold text-sky-400 bg-sky-500/10 px-1.5 py-0.5 rounded border border-sky-500/20">
+                      <span className="inline-block text-[10px] font-bold text-emerald-400 bg-emerald-500/10 px-1.5 py-0.5 rounded border border-emerald-500/20">
                         Workout
                       </span>
                     ) : (
@@ -319,7 +402,7 @@ export default function AthleteDashboard() {
           {/* Real Personal Weight Tracker (No Dummy Data) */}
           <div className="bg-zinc-900/90 border border-zinc-800/90 p-6 rounded-3xl space-y-4 shadow-xl">
             <div className="flex items-center gap-2">
-              <span className="p-2 rounded-2xl bg-sky-500/10 text-sky-400 border border-sky-500/20">
+              <span className="p-2 rounded-2xl bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
                 <Scale className="h-4 w-4" />
               </span>
               <div>
@@ -337,7 +420,7 @@ export default function AthleteDashboard() {
                 onChange={(e) => setQuickWeight(e.target.value)}
                 className="bg-zinc-950 border-zinc-800 text-white rounded-xl text-xs focus:border-emerald-500"
               />
-              <Button type="submit" size="sm" className="bg-sky-500 hover:bg-sky-400 text-zinc-950 font-black rounded-xl text-xs shrink-0">
+              <Button type="submit" size="sm" className="bg-emerald-500 hover:bg-emerald-400 text-zinc-950 font-black rounded-xl text-xs shrink-0">
                 <Plus className="h-4 w-4" /> Log
               </Button>
             </form>
@@ -380,14 +463,17 @@ export default function AthleteDashboard() {
         <div className="bg-zinc-900/90 border border-zinc-800/90 p-6 rounded-3xl space-y-4 shadow-xl">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <span className="p-2 rounded-2xl bg-rose-500/10 text-rose-400 border border-rose-500/20">
+              <span className="p-2 rounded-2xl bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
                 <Activity className="h-4 w-4" />
               </span>
               <div>
                 <h3 className="text-base font-bold text-white">Stato di Recupero Muscolare</h3>
-                <p className="text-xs text-zinc-400">Stima del recupero muscolare per gruppo muscolare</p>
+                <p className="text-xs text-zinc-400">Calcolato in base agli allenamenti completati nelle ultime 48 ore</p>
               </div>
             </div>
+            <span className="hidden sm:flex items-center gap-1 text-[11px] text-zinc-400 font-mono bg-zinc-950 px-2.5 py-1 rounded-xl border border-zinc-800">
+              <Info className="h-3.5 w-3.5 text-emerald-400" /> Stima Algoritmo
+            </span>
           </div>
 
           <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-3">
@@ -396,7 +482,7 @@ export default function AthleteDashboard() {
                 <p className="text-xs font-bold text-white">{m.name}</p>
                 <div className="h-1.5 w-full bg-zinc-900 rounded-full overflow-hidden">
                   <div 
-                    className={`h-full rounded-full ${m.percent >= 80 ? 'bg-emerald-400' : m.percent >= 50 ? 'bg-sky-400' : 'bg-rose-500'}`}
+                    className={`h-full rounded-full ${m.percent >= 80 ? 'bg-emerald-400' : 'bg-amber-400'}`}
                     style={{ width: `${m.percent}%` }}
                   />
                 </div>

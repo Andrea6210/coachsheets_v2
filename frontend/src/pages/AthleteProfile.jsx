@@ -125,7 +125,7 @@ export default function AthleteProfile() {
         {/* Header Hero Section */}
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 bg-gradient-to-r from-zinc-900 via-zinc-900/90 to-zinc-950 border border-emerald-500/20 p-6 rounded-3xl shadow-2xl glow-emerald">
           <div className="flex items-center gap-4">
-            <div className="h-16 w-16 rounded-2xl bg-gradient-to-tr from-emerald-500 to-sky-400 text-zinc-950 flex items-center justify-center font-black text-2xl shadow-lg shadow-emerald-500/20 shrink-0">
+            <div className="h-16 w-16 rounded-2xl bg-gradient-to-tr from-emerald-600 via-emerald-500 to-teal-400 text-zinc-950 flex items-center justify-center font-black text-2xl shadow-lg shadow-emerald-500/20 shrink-0">
               {user?.name ? user.name[0].toUpperCase() : "A"}
             </div>
             <div className="space-y-1">
@@ -149,7 +149,7 @@ export default function AthleteProfile() {
             </div>
             <div className="bg-zinc-950 border border-zinc-800 p-3 px-4 rounded-2xl text-center">
               <p className="text-[10px] uppercase font-bold text-zinc-400">Target Peso</p>
-              <p className="text-xl font-black text-sky-400 font-mono">{bodyMetrics.targetWeight || "--"} kg</p>
+              <p className="text-xl font-black text-emerald-400 font-mono">{bodyMetrics.targetWeight || "--"} kg</p>
             </div>
           </div>
         </div>
@@ -200,7 +200,7 @@ export default function AthleteProfile() {
           {/* New Weight Log Form (1 Col) */}
           <div className="bg-zinc-900/90 border border-zinc-800/90 p-6 rounded-3xl space-y-4 shadow-xl">
             <div className="flex items-center gap-2">
-              <span className="p-2 rounded-2xl bg-sky-500/10 text-sky-400 border border-sky-500/20">
+              <span className="p-2 rounded-2xl bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
                 <Plus className="h-5 w-5" />
               </span>
               <div>
@@ -344,7 +344,7 @@ export default function AthleteProfile() {
                 </div>
                 <div className="bg-zinc-950/80 border border-zinc-800 p-3 rounded-2xl text-center space-y-0.5">
                   <p className="text-[10px] font-bold text-zinc-400 uppercase">Giro Vita</p>
-                  <p className="text-base font-black text-sky-400 font-mono">{bodyMetrics.waist || "--"} cm</p>
+                  <p className="text-base font-black text-teal-400 font-mono">{bodyMetrics.waist || "--"} cm</p>
                 </div>
                 <div className="bg-zinc-950/80 border border-zinc-800 p-3 rounded-2xl text-center space-y-0.5">
                   <p className="text-[10px] font-bold text-zinc-400 uppercase">Circonferenza Petto</p>

@@ -39,6 +39,10 @@ export const Navbar = () => {
     { label: "Chat", icon: MessageSquare, path: "/chat/athlete" },
   ];
 
+  const displayName = user?.name && user.name !== "Utente" 
+    ? user.name 
+    : (user?.username || (user?.email ? user.email.split('@')[0] : "Atleta"));
+
   return (
     <>
       {/* Top Header */}
@@ -53,7 +57,7 @@ export const Navbar = () => {
                 className="flex items-center gap-2.5 group text-left"
                 data-testid="logo-btn"
               >
-                <div className="h-9 w-9 rounded-xl bg-gradient-to-tr from-emerald-500 via-teal-400 to-sky-400 flex items-center justify-center shadow-lg shadow-emerald-500/25 group-hover:scale-105 transition-transform">
+                <div className="h-9 w-9 rounded-xl bg-gradient-to-tr from-emerald-600 via-emerald-500 to-teal-400 flex items-center justify-center shadow-lg shadow-emerald-500/25 group-hover:scale-105 transition-transform">
                   <Dumbbell className="h-5 w-5 text-zinc-950 stroke-[2.5]" />
                 </div>
                 <div className="flex flex-col">
@@ -122,15 +126,15 @@ export const Navbar = () => {
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button variant="outline" size="sm" className="gap-2 bg-zinc-900 border-zinc-800 hover:bg-zinc-800 text-zinc-200 rounded-2xl px-3 py-1.5" data-testid="user-menu">
-                    <div className="h-6 w-6 rounded-full bg-gradient-to-tr from-emerald-500 to-sky-400 text-zinc-950 flex items-center justify-center font-black text-xs">
-                      {user.name ? user.name[0].toUpperCase() : "U"}
+                    <div className="h-6 w-6 rounded-full bg-gradient-to-tr from-emerald-500 to-teal-400 text-zinc-950 flex items-center justify-center font-black text-xs">
+                      {displayName ? displayName[0].toUpperCase() : "A"}
                     </div>
-                    <span className="max-w-[100px] truncate font-bold text-xs hidden sm:inline">{user.name}</span>
+                    <span className="max-w-[100px] truncate font-bold text-xs hidden sm:inline">{displayName}</span>
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="w-56 bg-zinc-950 border-zinc-800 text-zinc-200 rounded-2xl shadow-2xl">
                   <div className="px-3 py-2 border-b border-zinc-800/80">
-                    <p className="text-sm font-bold text-white truncate">{user.name}</p>
+                    <p className="text-sm font-bold text-white truncate">{displayName}</p>
                     <p className="text-xs text-zinc-400 truncate">{user.email}</p>
                     <div className="mt-1.5 inline-flex items-center gap-1 px-2.5 py-0.5 rounded-md text-[10px] font-extrabold uppercase tracking-wider bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
                       {user.role === "coach" ? "Coach" : "Atleta"}

@@ -18,7 +18,14 @@ export default function ExerciseLibrary() {
   const [selectedGroup, setSelectedGroup] = useState("Tutti");
   const [selectedEquipment, setSelectedEquipment] = useState("Tutti");
   const [selectedExercise, setSelectedExercise] = useState(null);
-  const [customExercises, setCustomExercises] = useState([]);
+  const [customExercises, setCustomExercises] = useState(() => {
+    try {
+      const saved = localStorage.getItem("coachsheets_custom_exercises");
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
   const [newExerciseName, setNewExerciseName] = useState("");
   const [newExerciseGroup, setNewExerciseGroup] = useState("Petto");
   const [newExerciseOpen, setNewExerciseOpen] = useState(false);
@@ -47,7 +54,11 @@ export default function ExerciseLibrary() {
       description: "Esercizio personalizzato aggiunto alla tua libreria CoachSheets.",
       instructions: ["Esegui l'esercizio secondo le indicazioni del tuo coach."]
     };
-    setCustomExercises((prev) => [created, ...prev]);
+    const updated = [created, ...customExercises];
+    setCustomExercises(updated);
+    try {
+      localStorage.setItem("coachsheets_custom_exercises", JSON.stringify(updated));
+    } catch {}
     setNewExerciseName("");
     setNewExerciseOpen(false);
   };

@@ -32,11 +32,22 @@ export const AuthProvider = ({ children }) => {
       
       const payload = decodeJwt(token);
       if (payload && payload.exp * 1000 > Date.now()) {
-        // Fast init local-first (0 latenza)
+        let savedUser = null;
+        try {
+          const raw = localStorage.getItem("cs_user");
+          if (raw) savedUser = JSON.parse(raw);
+        } catch {}
+
+        const fallbackName = payload.name && payload.name !== "Utente"
+          ? payload.name 
+          : (payload.username || payload.sub || (payload.email ? payload.email.split('@')[0] : null));
+
         setUser({
-          id: payload.userId,
-          role: payload.role,
-          name: payload.name || "Utente"
+          id: savedUser?.id || payload.userId || payload.id,
+          role: savedUser?.role || payload.role || "athlete",
+          name: savedUser?.name || fallbackName || "Atleta",
+          email: savedUser?.email || payload.email || "",
+          coachId: savedUser?.coachId || savedUser?.coach_id || payload.coachId || payload.coach_id
         });
         setLoading(false);
       } else {
@@ -46,6 +57,7 @@ export const AuthProvider = ({ children }) => {
       }
     } else {
       localStorage.removeItem("token");
+      localStorage.removeItem("cs_user");
       delete axios.defaults.headers.common["Authorization"];
       setLoading(false);
     }
@@ -65,6 +77,11 @@ export const AuthProvider = ({ children }) => {
       axios.defaults.headers.common["Authorization"] = `Bearer ${validToken}`;
     }
     
+    if (res.data.user) {
+      try {
+        localStorage.setItem("cs_user", JSON.stringify(res.data.user));
+      } catch {}
+    }
     setUser(res.data.user);
     return res.data.user;
   };
@@ -83,12 +100,18 @@ export const AuthProvider = ({ children }) => {
       axios.defaults.headers.common["Authorization"] = `Bearer ${validToken}`;
     }
     
+    if (res.data.user) {
+      try {
+        localStorage.setItem("cs_user", JSON.stringify(res.data.user));
+      } catch {}
+    }
     setUser(res.data.user);
     return res.data.user;
   };
 
   const logout = () => {
     localStorage.removeItem("token");
+    localStorage.removeItem("cs_user");
     setToken(null);
     setUser(null);
     delete axios.defaults.headers.common["Authorization"];
