@@ -14,8 +14,9 @@ import {
   Plus, 
   Scale, 
   BookOpen,
-  Zap,
-  TrendingUp
+  Calendar as CalendarIcon,
+  CheckCircle2,
+  Trash2
 } from "lucide-react";
 import { useAuth, API } from "@/contexts/AuthContext";
 import { Navbar } from "@/components/layout/Navbar";
@@ -26,29 +27,41 @@ export default function AthleteDashboard() {
   const [sheets, setSheets] = useState([]);
   const [loading, setLoading] = useState(true);
   const [quickWeight, setQuickWeight] = useState("");
-  const [weightLogs, setWeightLogs] = useState([
-    { date: "15 Set", weight: 74.5 },
-    { date: "17 Set", weight: 74.2 },
-    { date: "19 Set", weight: 73.9 },
-    { date: "Oggi", weight: 73.8 },
+  
+  // Real user weight logs initialized from localStorage (default empty)
+  const [weightLogs, setWeightLogs] = useState(() => {
+    try {
+      const saved = localStorage.getItem(`coachsheets_weight_logs_${user?.id || 'guest'}`);
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
+
+  // Days of the week for the weekly activity calendar view
+  const DAYS_OF_WEEK = ["Lun", "Mar", "Mer", "Gio", "Ven", "Sab", "Dom"];
+  
+  // Weekly calendar schedule overview (current week)
+  const [currentWeekSchedule, setCurrentWeekSchedule] = useState([
+    { day: "Lun", date: "16 Set", status: "Completato", workout: "Upper Body Forza" },
+    { day: "Mar", date: "17 Set", status: "Riposo", workout: "-" },
+    { day: "Mer", date: "18 Set", status: "Completato", workout: "Lower Body Ipertrofia" },
+    { day: "Gio", date: "19 Set", status: "Riposo", workout: "-" },
+    { day: "Ven", date: "20 Set", status: "In Programma", workout: "Push / Pull" },
+    { day: "Sab", date: "21 Set", status: "In Programma", workout: "Richiamo Braccia" },
+    { day: "Dom", date: "22 Set", status: "Riposo", workout: "-" },
   ]);
 
-  // Muscle Fatigue Map data with percentage meters and neon colors
+  // Muscle Fatigue Map data
   const muscleFatigue = [
     { name: "Petto", level: "Recuperato", percent: 100, color: "text-emerald-400 bg-emerald-500/10 border-emerald-500/30" },
-    { name: "Dorso", level: "In Recupero", percent: 65, color: "text-sky-400 bg-sky-500/10 border-sky-500/30" },
-    { name: "Gambe", level: "Affaticato", percent: 30, color: "text-rose-400 bg-rose-500/10 border-rose-500/30" },
-    { name: "Spalle", level: "Recuperato", percent: 95, color: "text-emerald-400 bg-emerald-500/10 border-emerald-500/30" },
-    { name: "Bicipiti", level: "In Recupero", percent: 70, color: "text-sky-400 bg-sky-500/10 border-sky-500/30" },
-    { name: "Tricipiti", level: "Recuperato", percent: 90, color: "text-emerald-400 bg-emerald-500/10 border-emerald-500/30" },
+    { name: "Dorso", level: "In Recupero", percent: 70, color: "text-sky-400 bg-sky-500/10 border-sky-500/30" },
+    { name: "Gambe", level: "Recuperato", percent: 90, color: "text-emerald-400 bg-emerald-500/10 border-emerald-500/30" },
+    { name: "Spalle", level: "Recuperato", percent: 100, color: "text-emerald-400 bg-emerald-500/10 border-emerald-500/30" },
+    { name: "Bicipiti", level: "In Recupero", percent: 65, color: "text-sky-400 bg-sky-500/10 border-sky-500/30" },
+    { name: "Tricipiti", level: "Recuperato", percent: 95, color: "text-emerald-400 bg-emerald-500/10 border-emerald-500/30" },
     { name: "Core", level: "Recuperato", percent: 100, color: "text-emerald-400 bg-emerald-500/10 border-emerald-500/30" },
   ];
-
-  // GitHub-style workout consistency heatmap simulation (last 60 days)
-  const heatmapDays = Array.from({ length: 60 }, (_, i) => {
-    const intensity = Math.random() > 0.4 ? Math.floor(Math.random() * 4) + 1 : 0;
-    return { id: i, intensity };
-  });
 
   useEffect(() => {
     fetchSheets();
@@ -67,11 +80,28 @@ export default function AthleteDashboard() {
 
   const handleAddWeight = (e) => {
     e.preventDefault();
-    if (!quickWeight || isNaN(quickWeight)) return;
-    const newEntry = { date: "Oggi", weight: parseFloat(quickWeight) };
-    setWeightLogs((prev) => [...prev.filter((w) => w.date !== "Oggi"), newEntry]);
+    if (!quickWeight || isNaN(quickWeight)) {
+      toast.error("Inserisci un peso valido (es. 74.5)");
+      return;
+    }
+    const todayStr = new Date().toLocaleDateString('it-IT', { day: '2-digit', month: 'short' });
+    const newEntry = { id: Date.now(), date: todayStr, weight: parseFloat(quickWeight) };
+    const updated = [newEntry, ...weightLogs.filter(w => w.date !== todayStr)];
+    setWeightLogs(updated);
+    try {
+      localStorage.setItem(`coachsheets_weight_logs_${user?.id || 'guest'}`, JSON.stringify(updated));
+    } catch {}
     setQuickWeight("");
-    toast.success("Peso registrato con successo!");
+    toast.success("Peso registrato correttamente!");
+  };
+
+  const handleDeleteWeight = (id) => {
+    const updated = weightLogs.filter(w => w.id !== id);
+    setWeightLogs(updated);
+    try {
+      localStorage.setItem(`coachsheets_weight_logs_${user?.id || 'guest'}`, JSON.stringify(updated));
+    } catch {}
+    toast.success("Rilevamento rimosso");
   };
 
   if (loading) {
@@ -86,6 +116,7 @@ export default function AthleteDashboard() {
   }
 
   const coachRecipientId = user?.coach_id || user?.coachId || "coach";
+  const completedWorkoutsThisWeek = currentWeekSchedule.filter(s => s.status === "Completato").length;
 
   return (
     <div className="min-h-screen bg-[#0c0e12] text-zinc-100 pb-20 md:pb-8">
@@ -93,20 +124,20 @@ export default function AthleteDashboard() {
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
         
-        {/* Top Hero Welcome Section with Neon Fluo Gradient */}
+        {/* Header Hero Section */}
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 bg-gradient-to-r from-zinc-900 via-zinc-900/90 to-zinc-950 border border-emerald-500/20 p-6 rounded-3xl shadow-2xl glow-emerald">
           <div className="space-y-1">
             <div className="flex items-center gap-2">
               <span className="px-2.5 py-0.5 rounded-full text-[11px] font-black uppercase tracking-wider bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
                 Atleta Attivo
               </span>
-              <span className="text-xs text-zinc-400 font-mono">CoachSheets Ecosystem</span>
+              <span className="text-xs text-zinc-400 font-mono">CoachSheets Platform</span>
             </div>
             <h1 className="text-2xl sm:text-4xl font-heading font-black tracking-tight text-white">
               Bentornato, {user?.name || "Atleta"} <span className="glow-text">⚡</span>
             </h1>
             <p className="text-sm text-zinc-300">
-              Pronto per la tua prossima sessione? Monitora il recupero muscolare ed avvia l'allenamento.
+              Controlla la tua programmazione settimanale, registra il tuo peso ed avvia il workout.
             </p>
           </div>
 
@@ -202,68 +233,73 @@ export default function AthleteDashboard() {
           )}
         </div>
 
-        {/* Heatmap Grid & Weight Log Section */}
+        {/* Clear Calendar Weekly Activity Overview & Real Weight Tracker */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           
-          {/* Consistency Heatmap */}
+          {/* Clear Weekly Calendar Schedule Overview */}
           <div className="lg:col-span-2 bg-zinc-900/90 border border-zinc-800/90 p-6 rounded-3xl space-y-4 shadow-xl">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <span className="p-2 rounded-2xl bg-amber-500/10 text-amber-400 border border-amber-500/20">
-                  <Flame className="h-4 w-4" />
+                <span className="p-2 rounded-2xl bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                  <CalendarIcon className="h-4 w-4" />
                 </span>
                 <div>
-                  <h3 className="text-base font-bold text-white">Consistenza Allenamenti</h3>
-                  <p className="text-xs text-zinc-400">Attività svolta negli ultimi 60 giorni</p>
+                  <h3 className="text-base font-bold text-white">Programmazione Settimanale</h3>
+                  <p className="text-xs text-zinc-400">Stato degli allenamenti di questa settimana</p>
                 </div>
               </div>
               <span className="text-xs font-mono font-black text-emerald-400 bg-emerald-500/10 px-3 py-1 rounded-xl border border-emerald-500/20">
-                18 Workout Questo Mese
+                {completedWorkoutsThisWeek} / 3 Sessioni Completate
               </span>
             </div>
 
-            {/* Heatmap Grid with Neon Emerald Blocks */}
-            <div className="pt-2">
-              <div className="grid grid-cols-12 gap-1.5">
-                {heatmapDays.map((day) => {
-                  let bgClass = "bg-zinc-950 border-zinc-800/60";
-                  if (day.intensity === 1) bgClass = "bg-emerald-950/90 border-emerald-800/60";
-                  if (day.intensity === 2) bgClass = "bg-emerald-600/80 border-emerald-500/60";
-                  if (day.intensity >= 3) bgClass = "bg-emerald-400 border-emerald-300 shadow-md shadow-emerald-400/40";
-                  
-                  return (
-                    <div
-                      key={day.id}
-                      title={`Giorno ${day.id + 1}: ${day.intensity > 0 ? `${day.intensity} sessioni` : 'Nessun allenamento'}`}
-                      className={`h-6 w-full rounded-md border transition-transform hover:scale-110 cursor-pointer ${bgClass}`}
-                    />
-                  );
-                })}
-              </div>
-              <div className="flex items-center justify-between text-[10px] text-zinc-400 mt-3 font-mono">
-                <span>60 Giorni Fa</span>
-                <div className="flex items-center gap-1">
-                  <span>Meno</span>
-                  <span className="h-2.5 w-2.5 rounded bg-zinc-950 border border-zinc-800"></span>
-                  <span className="h-2.5 w-2.5 rounded bg-emerald-950 border border-emerald-800"></span>
-                  <span className="h-2.5 w-2.5 rounded bg-emerald-600"></span>
-                  <span className="h-2.5 w-2.5 rounded bg-emerald-400"></span>
-                  <span>Più</span>
+            {/* Clear 7-Day Weekly Grid */}
+            <div className="grid grid-cols-1 sm:grid-cols-7 gap-2 pt-2">
+              {currentWeekSchedule.map((item) => (
+                <div
+                  key={item.day}
+                  className={`p-3 rounded-2xl border flex flex-col justify-between space-y-2 text-center transition-all ${
+                    item.status === "Completato"
+                      ? "bg-emerald-950/40 border-emerald-500/50 text-emerald-300 shadow-md shadow-emerald-500/10"
+                      : item.status === "In Programma"
+                      ? "bg-zinc-950 border-sky-500/40 text-sky-300"
+                      : "bg-zinc-950/60 border-zinc-800/80 text-zinc-500"
+                  }`}
+                >
+                  <div>
+                    <span className="text-xs font-black uppercase block">{item.day}</span>
+                    <span className="text-[10px] font-mono text-zinc-400 block mt-0.5">{item.date}</span>
+                  </div>
+
+                  <div className="py-1">
+                    {item.status === "Completato" ? (
+                      <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-400 bg-emerald-500/10 px-1.5 py-0.5 rounded border border-emerald-500/20">
+                        <CheckCircle2 className="h-3 w-3" /> Fatto
+                      </span>
+                    ) : item.status === "In Programma" ? (
+                      <span className="inline-block text-[10px] font-bold text-sky-400 bg-sky-500/10 px-1.5 py-0.5 rounded border border-sky-500/20">
+                        Workout
+                      </span>
+                    ) : (
+                      <span className="inline-block text-[10px] font-medium text-zinc-500">
+                        Riposo
+                      </span>
+                    )}
+                  </div>
                 </div>
-                <span>Oggi</span>
-              </div>
+              ))}
             </div>
           </div>
 
-          {/* Quick Body Weight Tracker Widget */}
+          {/* Real Personal Weight Tracker (No Dummy Data) */}
           <div className="bg-zinc-900/90 border border-zinc-800/90 p-6 rounded-3xl space-y-4 shadow-xl">
             <div className="flex items-center gap-2">
               <span className="p-2 rounded-2xl bg-sky-500/10 text-sky-400 border border-sky-500/20">
                 <Scale className="h-4 w-4" />
               </span>
               <div>
-                <h3 className="text-base font-bold text-white">Peso Corporeo</h3>
-                <p className="text-xs text-zinc-400">Registrazione rapida bilancia</p>
+                <h3 className="text-base font-bold text-white">Registro Peso Corporeo</h3>
+                <p className="text-xs text-zinc-400">Inserisci e traccia i tuoi rilevamenti reali</p>
               </div>
             </div>
 
@@ -271,7 +307,7 @@ export default function AthleteDashboard() {
               <Input
                 type="number"
                 step="0.1"
-                placeholder="es. 74.2"
+                placeholder="es. 75.0"
                 value={quickWeight}
                 onChange={(e) => setQuickWeight(e.target.value)}
                 className="bg-zinc-950 border-zinc-800 text-white rounded-xl text-xs focus:border-emerald-500"
@@ -282,15 +318,34 @@ export default function AthleteDashboard() {
             </form>
 
             <div className="space-y-2 pt-2 border-t border-zinc-800/80">
-              <p className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider">Ultimi rilevamenti</p>
-              <div className="space-y-1.5">
-                {weightLogs.slice(-3).map((w, idx) => (
-                  <div key={idx} className="flex items-center justify-between text-xs bg-zinc-950/80 p-2.5 rounded-xl border border-zinc-800">
-                    <span className="text-zinc-400">{w.date}</span>
-                    <span className="font-bold text-emerald-400 font-mono">{w.weight} kg</span>
-                  </div>
-                ))}
-              </div>
+              <p className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider">I Tuoi Rilevamenti</p>
+              
+              {weightLogs.length === 0 ? (
+                <div className="p-4 text-center border border-dashed border-zinc-800 rounded-2xl bg-zinc-950/40">
+                  <p className="text-xs text-zinc-400 leading-relaxed">
+                    Nessun peso ancora registrato.<br />
+                    <span className="text-emerald-400 font-semibold">Inserisci il tuo peso qui sopra</span> per iniziare la tua cronologia personale.
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-1.5 max-h-48 overflow-y-auto">
+                  {weightLogs.map((w) => (
+                    <div key={w.id || w.date} className="flex items-center justify-between text-xs bg-zinc-950/80 p-2.5 rounded-xl border border-zinc-800">
+                      <span className="text-zinc-400">{w.date}</span>
+                      <div className="flex items-center gap-2">
+                        <span className="font-bold text-emerald-400 font-mono">{w.weight} kg</span>
+                        <button
+                          onClick={() => handleDeleteWeight(w.id)}
+                          className="text-zinc-600 hover:text-rose-400 transition-colors p-1"
+                          title="Rimuovi"
+                        >
+                          <Trash2 className="h-3 w-3" />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
 
@@ -305,7 +360,7 @@ export default function AthleteDashboard() {
               </span>
               <div>
                 <h3 className="text-base font-bold text-white">Stato di Recupero Muscolare</h3>
-                <p className="text-xs text-zinc-400">Stima dell'affaticamento muscolare basata sulle ultime sessioni eseguite</p>
+                <p className="text-xs text-zinc-400">Stima del recupero muscolare per gruppo muscolare</p>
               </div>
             </div>
           </div>
