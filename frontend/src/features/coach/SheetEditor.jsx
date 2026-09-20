@@ -22,6 +22,7 @@ import {
 import { useAuth, API, WS_URL } from "@/contexts/AuthContext";
 import { useTheme } from "@/contexts/ThemeContext";
 import { Navbar } from "@/components/layout/Navbar";
+import { EXERCISE_CATALOG } from "@/lib/exerciseCatalog";
 const SheetEditor = () => {
   const { user, token } = useAuth();
   const { sheetId } = useParams();
@@ -644,15 +645,28 @@ const SheetEditor = () => {
                     activeDay.exercises.map((ex) => (
                       <div key={ex.id} className="border-t border-border" data-testid={`exercise-${ex.id}`}>
                         <div className="flex flex-col gap-2 p-3 sm:flex-row sm:items-center sm:gap-0 sm:p-0 hover:bg-muted/30 transition-colors">
-                          {/* Nome esercizio */}
+                          {/* Nome esercizio con ricerca da catalogo o creazione nuovo */}
                           <div className="sm:w-[26%] sm:p-2">
                             <Input
+                              list="exercise-catalog-suggestions"
                               value={ex.exercise}
-                              onChange={(e) => updateExercise(activeDay.id, ex.id, "exercise", e.target.value)}
-                              placeholder="Es: Panca Piana"
-                              className="border border-input sm:border-0 bg-transparent focus-visible:ring-0 px-2 sm:p-1 font-medium sm:font-normal"
+                              onChange={(e) => {
+                                const val = e.target.value;
+                                updateExercise(activeDay.id, ex.id, "exercise", val);
+                                const found = EXERCISE_CATALOG.find(c => c.name.toLowerCase() === val.toLowerCase());
+                                if (found && !ex.rest) {
+                                  updateExercise(activeDay.id, ex.id, "rest", found.defaultRest || "90s");
+                                }
+                              }}
+                              placeholder="Cerca o inserisci esercizio..."
+                              className="border border-zinc-800 sm:border-0 bg-transparent text-white focus-visible:ring-emerald-500/50 px-2 sm:p-1 font-medium placeholder:text-zinc-500"
                               data-testid={`exercise-name-${ex.id}`}
                             />
+                            <datalist id="exercise-catalog-suggestions">
+                              {EXERCISE_CATALOG.map((cat) => (
+                                <option key={cat.id} value={cat.name}>{cat.muscleGroup} • {cat.equipment}</option>
+                              ))}
+                            </datalist>
                           </div>
 
                           {/* Serie / Reps / Peso / Rec - griglia compatta su mobile, riga su desktop */}
