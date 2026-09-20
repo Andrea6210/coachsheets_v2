@@ -440,11 +440,11 @@ const SheetEditor = () => {
   if (!sheet) return null;
 
   return (
-    <div className="min-h-screen bg-background" data-testid="sheet-editor">
+    <div className="min-h-screen bg-[#0c0e12] text-zinc-100 pb-20 md:pb-8" data-testid="sheet-editor">
       <Navbar />
       
       {/* Sticky Header */}
-      <div className="glass-header sticky top-16 z-40 border-b">
+      <div className="sticky top-16 z-30 bg-[#0c0e12]/90 border-b border-zinc-800/80 backdrop-blur-xl">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3">
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2">
             <div className="flex items-center gap-4">

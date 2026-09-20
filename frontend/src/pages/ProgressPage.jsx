@@ -1,5 +1,5 @@
-﻿import React, { useState, useEffect } from "react";
-import { useNavigate, useParams, Link } from "react-router-dom";
+import React, { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import axios from "axios";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -7,22 +7,15 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Checkbox } from "@/components/ui/checkbox";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
-import { Textarea } from "@/components/ui/textarea";
 import { 
-  Sun, Moon, LogOut, Plus, Users, FileText, Trash2, Copy, 
-  MessageSquare, History, ChevronRight, ChevronDown, Menu, X, Send, 
-  Dumbbell, User, Settings, Home, ArrowLeft, Check, Edit2, Link as LinkIcon, Video, Archive, TrendingUp
+  TrendingUp, ArrowLeft, ChevronRight, ChevronDown, Trash2, Plus, Trophy, Activity, Flame, Search
 } from "lucide-react";
-import { useAuth, API, WS_URL } from "@/contexts/AuthContext";
-import { useTheme } from "@/contexts/ThemeContext";
+import { useAuth, API } from "@/contexts/AuthContext";
 import { Navbar } from "@/components/layout/Navbar";
-const ProgressPage = () => {
+
+export default function ProgressPage() {
   const { user } = useAuth();
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
@@ -33,7 +26,6 @@ const ProgressPage = () => {
   const [search, setSearch] = useState("");
   const [activeTab, setActiveTab] = useState("andamento");
 
-  // Record personali (massimali, tempi, corpo libero, ecc.)
   const [records, setRecords] = useState([]);
   const [achievements, setAchievements] = useState([]);
   const [recordsLoading, setRecordsLoading] = useState(false);
@@ -85,7 +77,7 @@ const ProgressPage = () => {
       setRecords(res.data.personal_records || []);
       setAchievements(res.data.achievements || []);
     } catch (e) {
-      // silenzioso: la sezione andamento resta comunque utilizzabile
+      // silenzioso
     } finally {
       setRecordsLoading(false);
     }
@@ -93,7 +85,7 @@ const ProgressPage = () => {
 
   const addRecord = async () => {
     if (!newRecord.exercise.trim()) {
-      toast.error("Dai un nome al record (es. \"Panca Piana\" o \"5km Corsa\")");
+      toast.error("Inserisci il nome dell'esercizio");
       return;
     }
     if (!currentAthleteId) {
@@ -116,7 +108,7 @@ const ProgressPage = () => {
       await axios.post(`${API}/athletes/${currentAthleteId}/stats/records`, payload);
       setNewRecord({ exercise: "", category: "Forza", weight: "", reps: "", customValue: "", date: new Date().toISOString().split("T")[0], notes: "" });
       fetchRecords(currentAthleteId);
-      toast.success("Record registrato!");
+      toast.success("Record registrato con successo!");
     } catch (e) {
       toast.error(e.response?.data?.detail || e.response?.data?.message || "Errore nella registrazione");
     }
@@ -161,7 +153,6 @@ const ProgressPage = () => {
     return parseFloat(match[0].replace(",", "."));
   };
 
-  // Raggruppa le voci per nome esercizio
   const grouped = entries.reduce((acc, e) => {
     if (!acc[e.exercise_name]) acc[e.exercise_name] = [];
     acc[e.exercise_name].push(e);
@@ -173,29 +164,45 @@ const ProgressPage = () => {
     .sort();
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-[#0c0e12] text-zinc-100 pb-20 md:pb-8">
       <Navbar />
-      <main className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-        <div className="flex items-center gap-4 mb-6">
-          <Button variant="ghost" size="sm" onClick={() => navigate(-1)} data-testid="progress-back-btn">
-            <ArrowLeft className="h-4 w-4" />
+
+      <main className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
+        
+        {/* Header Section */}
+        <div className="flex items-center gap-3 border-b border-zinc-800/80 pb-6">
+          <Button 
+            variant="ghost" 
+            size="icon" 
+            onClick={() => navigate(-1)} 
+            className="h-9 w-9 text-zinc-400 hover:text-white hover:bg-zinc-800 rounded-xl"
+            data-testid="progress-back-btn"
+          >
+            <ArrowLeft className="h-5 w-5" />
           </Button>
           <div>
-            <h1 className="font-heading font-bold text-2xl flex items-center gap-2">
-              <TrendingUp className="h-6 w-6" /> Progressi
-            </h1>
-            <p className="text-sm text-muted-foreground">Andamento pesi e reps nel tempo, aggregato su tutte le schede</p>
+            <div className="flex items-center gap-2">
+              <span className="p-1.5 rounded-lg bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                <TrendingUp className="h-4 w-4" />
+              </span>
+              <h1 className="text-2xl font-heading font-extrabold text-white tracking-tight">
+                Analisi & Progressi
+              </h1>
+            </div>
+            <p className="text-xs text-zinc-400 mt-0.5">
+              Grafici di progressione carichi, volume e record personali OpenGym
+            </p>
           </div>
         </div>
 
         {user?.role === "coach" && (
-          <div className="mb-4 space-y-1">
-            <Label className="text-xs text-muted-foreground">Atleta</Label>
+          <div className="bg-zinc-900/80 border border-zinc-800 p-4 rounded-2xl space-y-2">
+            <Label className="text-xs font-bold text-zinc-300">Seleziona Atleta</Label>
             {athletes.length === 0 ? (
-              <p className="text-sm text-muted-foreground">Nessun atleta disponibile.</p>
+              <p className="text-xs text-zinc-500">Nessun atleta disponibile.</p>
             ) : (
               <select
-                className="w-full sm:w-64 px-3 py-2 border border-input rounded-md bg-background text-sm"
+                className="w-full sm:w-64 px-3 py-2 border border-zinc-800 rounded-xl bg-zinc-950 text-white text-xs font-semibold focus:outline-none focus:border-emerald-500"
                 value={selectedAthleteId || ""}
                 onChange={(e) => setSelectedAthleteId(e.target.value)}
                 data-testid="progress-page-athlete-select"
@@ -208,153 +215,153 @@ const ProgressPage = () => {
           </div>
         )}
 
-        {!loading && exerciseNames.length > 0 && (
-          <Input
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Cerca esercizio..."
-            className="mb-4"
-            data-testid="progress-search-input"
-          />
-        )}
-
+        {/* Tabs for Progress / Records */}
         <Tabs value={activeTab} onValueChange={setActiveTab}>
-          <TabsList className="mb-4">
-            <TabsTrigger value="andamento" data-testid="tab-andamento">Andamento</TabsTrigger>
-            <TabsTrigger value="record" data-testid="tab-record">
-              Record{records.length > 0 && ` (${records.length})`}
+          <TabsList className="bg-zinc-900 border border-zinc-800 p-1 rounded-2xl mb-6">
+            <TabsTrigger value="andamento" data-testid="tab-andamento" className="text-xs font-bold rounded-xl data-[state=active]:bg-emerald-500 data-[state=active]:text-zinc-950">
+              Andamento Carichi
+            </TabsTrigger>
+            <TabsTrigger value="record" data-testid="tab-record" className="text-xs font-bold rounded-xl data-[state=active]:bg-emerald-500 data-[state=active]:text-zinc-950">
+              Record Personali {records.length > 0 && `(${records.length})`}
             </TabsTrigger>
           </TabsList>
 
-          <TabsContent value="andamento">
-        {loading ? (
-          <div className="flex justify-center py-12">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
-          </div>
-        ) : exerciseNames.length === 0 ? (
-          <Card>
-            <CardContent className="py-12 text-center text-muted-foreground text-sm">
-              Nessun progresso registrato ancora.<br />
-              Vai su una scheda, apri un esercizio e clicca l'icona ðŸ“ˆ per iniziare a tracciare.
-            </CardContent>
-          </Card>
-        ) : (
-          <div className="space-y-3">
-            {exerciseNames.map((name) => {
-              const list = grouped[name].sort((a, b) => new Date(a.date) - new Date(b.date));
-              const chartData = list
-                .map(e => ({ date: e.date, peso: parseWeightValue(e.weight) }))
-                .filter(e => e.peso !== null);
-              const latest = list[list.length - 1];
-              const isOpen = expandedExercise === name;
-              // Massimale automatico: il valore piu' alto tra tutte le registrazioni di questo esercizio
-              const best = chartData.reduce((max, e) => (max === null || e.peso > max.peso ? e : max), null);
-
-              return (
-                <Card key={name} className="overflow-hidden" data-testid={`progress-exercise-${name}`}>
-                  <button
-                    className="w-full flex items-center justify-between p-4 hover:bg-muted/30 transition-colors text-left"
-                    onClick={() => setExpandedExercise(isOpen ? null : name)}
-                  >
-                    <div>
-                      <p className="font-semibold">{name}</p>
-                      <p className="text-xs text-muted-foreground">
-                        {list.length} {list.length === 1 ? "registrazione" : "registrazioni"} Â· ultimo: {latest.weight || "â€”"} {latest.reps && `Ã— ${latest.reps}`} ({latest.date})
-                      </p>
-                      {best && (
-                        <p className="text-xs text-amber-500 font-medium mt-0.5">
-                          ðŸ† Record: {best.peso}kg ({best.date})
-                        </p>
-                      )}
-                    </div>
-                    {isOpen ? <ChevronDown className="h-4 w-4 shrink-0" /> : <ChevronRight className="h-4 w-4 shrink-0" />}
-                  </button>
-
-                  {isOpen && (
-                    <div className="border-t border-border p-4 space-y-4">
-                      {chartData.length >= 2 && (
-                        <div className="h-48 w-full">
-                          <ResponsiveContainer width="100%" height="100%">
-                            <LineChart data={chartData} margin={{ top: 5, right: 10, left: -20, bottom: 0 }}>
-                              <CartesianGrid strokeDasharray="3 3" opacity={0.2} />
-                              <XAxis dataKey="date" tick={{ fontSize: 11 }} />
-                              <YAxis tick={{ fontSize: 11 }} domain={['auto', 'auto']} />
-                              <Tooltip />
-                              <Line type="monotone" dataKey="peso" stroke="currentColor" className="text-primary" strokeWidth={2} dot={{ r: 3 }} />
-                            </LineChart>
-                          </ResponsiveContainer>
-                        </div>
-                      )}
-                      <div className="border border-input rounded-md divide-y">
-                        {[...list].reverse().map((entry) => (
-                          <div key={entry.id} className="flex items-center justify-between gap-2 p-2 px-3 text-sm">
-                            <div>
-                              <span className="font-mono">{entry.date}</span>
-                              {" Â· "}
-                              <span className="font-medium">{entry.weight || "â€”"}</span>
-                              {entry.reps && <span className="text-muted-foreground"> Ã— {entry.reps}</span>}
-                              {entry.week_label && <span className="text-xs text-muted-foreground ml-1">({entry.week_label})</span>}
-                              <div className="text-xs text-muted-foreground">
-                                {entry.logged_by_name} {entry.logged_by_role === "coach" ? "(coach)" : "(atleta)"}
-                              </div>
-                            </div>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => deleteEntry(entry)}
-                              className="h-7 w-7 p-0 text-destructive shrink-0"
-                              data-testid={`delete-progress-page-${entry.id}`}
-                            >
-                              <Trash2 className="h-3.5 w-3.5" />
-                            </Button>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                </Card>
-              );
-            })}
-          </div>
-        )}
-          </TabsContent>
-
-          <TabsContent value="record">
-            {achievements.length > 0 && (
-              <div className="flex flex-wrap gap-2 mb-4" data-testid="achievements-strip">
-                {achievements.map((a) => (
-                  <div key={a.id} className="flex items-center gap-1.5 bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20 rounded-full px-3 py-1 text-xs font-medium" title={a.description}>
-                    ðŸ… {a.title}
-                  </div>
-                ))}
+          <TabsContent value="andamento" className="space-y-4">
+            {!loading && exerciseNames.length > 0 && (
+              <div className="relative">
+                <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-zinc-400" />
+                <Input
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  placeholder="Filtra esercizi..."
+                  className="pl-10 bg-zinc-900 border-zinc-800 text-white rounded-xl text-xs"
+                  data-testid="progress-search-input"
+                />
               </div>
             )}
 
-            <Card className="mb-4">
+            {loading ? (
+              <div className="flex justify-center py-12">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-emerald-500"></div>
+              </div>
+            ) : exerciseNames.length === 0 ? (
+              <Card className="bg-zinc-900/60 border-zinc-800 text-center py-12 rounded-2xl">
+                <CardContent className="space-y-2">
+                  <Activity className="h-10 w-10 mx-auto text-zinc-600" />
+                  <p className="text-xs text-zinc-400">
+                    Nessun progresso registrato ancora. Completa le serie nei tuoi workout per generare i grafici!
+                  </p>
+                </CardContent>
+              </Card>
+            ) : (
+              <div className="space-y-3">
+                {exerciseNames.map((name) => {
+                  const list = grouped[name].sort((a, b) => new Date(a.date) - new Date(b.date));
+                  const chartData = list
+                    .map(e => ({ date: e.date, peso: parseWeightValue(e.weight) }))
+                    .filter(e => e.peso !== null);
+                  const latest = list[list.length - 1];
+                  const isOpen = expandedExercise === name;
+                  const best = chartData.reduce((max, e) => (max === null || e.peso > max.peso ? e : max), null);
+
+                  return (
+                    <div 
+                      key={name} 
+                      className="bg-zinc-900/80 border border-zinc-800 rounded-2xl overflow-hidden shadow-lg transition-all"
+                      data-testid={`progress-exercise-${name}`}
+                    >
+                      <button
+                        className="w-full flex items-center justify-between p-4 hover:bg-zinc-800/50 transition-colors text-left"
+                        onClick={() => setExpandedExercise(isOpen ? null : name)}
+                      >
+                        <div className="space-y-1">
+                          <p className="font-bold text-white text-base">{name}</p>
+                          <p className="text-xs text-zinc-400">
+                            {list.length} registrazioni · ultimo: <span className="text-emerald-400 font-bold">{latest.weight || "—"} {latest.reps && `× ${latest.reps}`}</span> ({latest.date})
+                          </p>
+                          {best && (
+                            <p className="text-xs text-amber-400 font-bold flex items-center gap-1 mt-0.5">
+                              <Trophy className="h-3 w-3" /> Max PR: {best.peso} kg ({best.date})
+                            </p>
+                          )}
+                        </div>
+                        {isOpen ? <ChevronDown className="h-4 w-4 text-zinc-400" /> : <ChevronRight className="h-4 w-4 text-zinc-400" />}
+                      </button>
+
+                      {isOpen && (
+                        <div className="border-t border-zinc-800 p-4 space-y-4 bg-zinc-950/60">
+                          {chartData.length >= 2 && (
+                            <div className="h-48 w-full pt-2">
+                              <ResponsiveContainer width="100%" height="100%">
+                                <LineChart data={chartData} margin={{ top: 5, right: 10, left: -20, bottom: 0 }}>
+                                  <CartesianGrid strokeDasharray="3 3" stroke="#27272a" />
+                                  <XAxis dataKey="date" tick={{ fontSize: 10, fill: '#71717a' }} />
+                                  <YAxis tick={{ fontSize: 10, fill: '#71717a' }} domain={['auto', 'auto']} />
+                                  <Tooltip contentStyle={{ backgroundColor: '#18181b', borderColor: '#27272a', borderRadius: '12px', color: '#fff', fontSize: '12px' }} />
+                                  <Line type="monotone" dataKey="peso" stroke="#10b981" strokeWidth={2.5} dot={{ r: 4, fill: '#10b981' }} />
+                                </LineChart>
+                              </ResponsiveContainer>
+                            </div>
+                          )}
+
+                          <div className="border border-zinc-800 rounded-xl divide-y divide-zinc-800 overflow-hidden">
+                            {[...list].reverse().map((entry) => (
+                              <div key={entry.id} className="flex items-center justify-between p-3 text-xs bg-zinc-900/40">
+                                <div className="space-y-0.5">
+                                  <span className="font-mono text-zinc-400">{entry.date}</span>
+                                  {" · "}
+                                  <span className="font-bold text-white">{entry.weight || "—"}</span>
+                                  {entry.reps && <span className="text-emerald-400 font-bold"> × {entry.reps}</span>}
+                                  {entry.week_label && <span className="text-[10px] text-zinc-500 ml-1">({entry.week_label})</span>}
+                                </div>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  onClick={() => deleteEntry(entry)}
+                                  className="h-7 w-7 text-rose-400 hover:bg-rose-500/10 rounded-lg"
+                                  data-testid={`delete-progress-page-${entry.id}`}
+                                >
+                                  <Trash2 className="h-3.5 w-3.5" />
+                                </Button>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </TabsContent>
+
+          <TabsContent value="record" className="space-y-4">
+            <Card className="bg-zinc-900/80 border-zinc-800 rounded-2xl">
               <CardHeader className="pb-3">
-                <CardTitle className="text-base">Nuovo record</CardTitle>
-                <CardDescription>Massimali, tempi, ripetizioni a corpo libero â€” qualsiasi tipo di record personale</CardDescription>
+                <CardTitle className="text-base text-white font-bold">Aggiungi Record Personale</CardTitle>
+                <CardDescription className="text-xs text-zinc-400">Registra i tuoi massimali di forza o traguardi di resistenza</CardDescription>
               </CardHeader>
               <CardContent className="space-y-3">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div className="space-y-1">
-                    <Label className="text-xs text-muted-foreground">Nome record</Label>
+                    <Label className="text-xs text-zinc-400">Nome Record</Label>
                     <Input
                       value={newRecord.exercise}
                       onChange={(e) => setNewRecord({ ...newRecord, exercise: e.target.value })}
-                      placeholder="Es: Panca Piana, 5km Corsa, Plank..."
+                      placeholder="es. Panca Piana 1RM"
+                      className="bg-zinc-950 border-zinc-800 text-white text-xs rounded-xl"
                       data-testid="new-record-name"
                     />
                   </div>
                   <div className="space-y-1">
-                    <Label className="text-xs text-muted-foreground">Categoria</Label>
+                    <Label className="text-xs text-zinc-400">Categoria</Label>
                     <select
-                      className="w-full px-3 py-2 border border-input rounded-md bg-background text-sm h-9"
+                      className="w-full px-3 py-2 border border-zinc-800 rounded-xl bg-zinc-950 text-white text-xs h-9"
                       value={newRecord.category}
                       onChange={(e) => setNewRecord({ ...newRecord, category: e.target.value })}
                       data-testid="new-record-category"
                     >
-                      <option value="Forza">Forza (massimale)</option>
+                      <option value="Forza">Forza (1RM / Massimale)</option>
                       <option value="Peso Corporeo">Peso Corporeo</option>
                       <option value="Resistenza">Resistenza</option>
                       <option value="Corpo Libero">Corpo Libero</option>
@@ -366,58 +373,40 @@ const ProgressPage = () => {
                 {isStrengthCategory ? (
                   <div className="grid grid-cols-2 gap-3">
                     <div className="space-y-1">
-                      <Label className="text-xs text-muted-foreground">Peso (kg)</Label>
+                      <Label className="text-xs text-zinc-400">Peso (kg)</Label>
                       <Input
                         value={newRecord.weight}
                         onChange={(e) => setNewRecord({ ...newRecord, weight: e.target.value })}
-                        placeholder="120"
+                        placeholder="100"
+                        className="bg-zinc-950 border-zinc-800 text-white text-xs rounded-xl"
                         data-testid="new-record-weight"
                       />
                     </div>
                     <div className="space-y-1">
-                      <Label className="text-xs text-muted-foreground">Ripetizioni</Label>
+                      <Label className="text-xs text-zinc-400">Ripetizioni</Label>
                       <Input
                         value={newRecord.reps}
                         onChange={(e) => setNewRecord({ ...newRecord, reps: e.target.value })}
-                        placeholder="1 (per il vero massimale)"
+                        placeholder="1"
+                        className="bg-zinc-950 border-zinc-800 text-white text-xs rounded-xl"
                         data-testid="new-record-reps"
                       />
                     </div>
                   </div>
                 ) : (
                   <div className="space-y-1">
-                    <Label className="text-xs text-muted-foreground">Valore</Label>
+                    <Label className="text-xs text-zinc-400">Valore Custom</Label>
                     <Input
                       value={newRecord.customValue}
                       onChange={(e) => setNewRecord({ ...newRecord, customValue: e.target.value })}
-                      placeholder="Es: 22:30, 45 reps, 3 min..."
+                      placeholder="es. 30 trazioni consecutive"
+                      className="bg-zinc-950 border-zinc-800 text-white text-xs rounded-xl"
                       data-testid="new-record-value"
                     />
                   </div>
                 )}
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div className="space-y-1">
-                    <Label className="text-xs text-muted-foreground">Data</Label>
-                    <Input
-                      type="date"
-                      value={newRecord.date}
-                      onChange={(e) => setNewRecord({ ...newRecord, date: e.target.value })}
-                      data-testid="new-record-date"
-                    />
-                  </div>
-                  <div className="space-y-1">
-                    <Label className="text-xs text-muted-foreground">Note (opzionale)</Label>
-                    <Input
-                      value={newRecord.notes}
-                      onChange={(e) => setNewRecord({ ...newRecord, notes: e.target.value })}
-                      placeholder="Come ti sei sentito, condizioni..."
-                      data-testid="new-record-notes"
-                    />
-                  </div>
-                </div>
-
-                <Button onClick={addRecord} className="w-full gap-2" data-testid="confirm-add-record">
+                <Button onClick={addRecord} className="w-full bg-emerald-500 hover:bg-emerald-400 text-zinc-950 font-bold gap-2 text-xs rounded-xl shadow-lg shadow-emerald-500/20" data-testid="confirm-add-record">
                   <Plus className="h-4 w-4" /> Registra Record
                 </Button>
               </CardContent>
@@ -425,63 +414,43 @@ const ProgressPage = () => {
 
             {recordsLoading ? (
               <div className="flex justify-center py-8">
-                <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary"></div>
+                <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-emerald-500"></div>
               </div>
             ) : records.length === 0 ? (
-              <p className="text-sm text-muted-foreground text-center py-6">Nessun record registrato ancora.</p>
+              <p className="text-xs text-zinc-500 text-center py-6">Nessun record registrato finora.</p>
             ) : (
               <div className="space-y-2">
                 {[...records].sort((a, b) => new Date(b.date) - new Date(a.date)).map((r) => (
-                  <Card key={r.id} data-testid={`record-${r.id}`}>
-                    <CardContent className="p-3 flex items-center justify-between gap-2">
-                      <div className="min-w-0">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <p className="font-medium">{r.exercise}</p>
-                          {r.category && (
-                            <Badge variant="outline" className="text-xs">{r.category}</Badge>
-                          )}
-                        </div>
-                        <p className="text-sm">
-                          {r.weight ? (
-                            <>
-                              <span className="font-mono">{r.weight}kg</span>
-                              {r.reps && <span className="text-muted-foreground"> Ã— {r.reps}</span>}
-                              {r.estimated_one_rep_max && r.reps > 1 && (
-                                <span className="text-xs text-muted-foreground ml-1">
-                                  (1RM stimato: {r.estimated_one_rep_max.toFixed(1)}kg)
-                                </span>
-                              )}
-                            </>
-                          ) : (
-                            <span className="font-mono">{r.custom_value}</span>
-                          )}
-                        </p>
-                        <p className="text-xs text-muted-foreground">
-                          {r.date} Â· {r.logged_by_name} {r.logged_by_role === "coach" ? "(coach)" : "(atleta)"}
-                          {r.notes && ` Â· ${r.notes}`}
-                        </p>
+                  <div key={r.id} className="bg-zinc-900/80 border border-zinc-800 p-4 rounded-2xl flex items-center justify-between gap-3" data-testid={`record-${r.id}`}>
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-2">
+                        <p className="font-bold text-white text-sm">{r.exercise}</p>
+                        <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                          {r.category}
+                        </span>
                       </div>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => deleteRecord(r.id)}
-                        className="h-8 w-8 p-0 text-destructive shrink-0"
-                        data-testid={`delete-record-${r.id}`}
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </CardContent>
-                  </Card>
+                      <p className="text-xs font-mono font-bold text-emerald-400">
+                        {r.weight ? `${r.weight} kg × ${r.reps || 1}` : r.custom_value}
+                      </p>
+                    </div>
+
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => deleteRecord(r.id)}
+                      className="h-8 w-8 text-rose-400 hover:bg-rose-500/10 rounded-lg"
+                      data-testid={`delete-record-${r.id}`}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
                 ))}
               </div>
             )}
           </TabsContent>
         </Tabs>
+
       </main>
     </div>
   );
-};
-
-// Main App
-export default ProgressPage;
-
+}
