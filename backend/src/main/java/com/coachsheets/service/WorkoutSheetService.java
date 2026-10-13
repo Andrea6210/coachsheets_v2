@@ -39,10 +39,7 @@ public class WorkoutSheetService {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Only coaches can create sheets");
         }
         
-        List<String> athleteIds = request.getAthleteIds();
-        if (athleteIds == null || athleteIds.isEmpty()) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "At least one athlete required");
-        }
+        List<String> athleteIds = request.getAthleteIds() != null ? request.getAthleteIds() : new ArrayList<>();
         
         // Verify all athletes belong to this coach
         for (String athleteId : athleteIds) {
@@ -52,6 +49,7 @@ public class WorkoutSheetService {
                 throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Not your athlete: " + athleteId);
             }
         }
+
         
         WorkoutSheet sheet = WorkoutSheet.create(request.getTitle(), coach.getId(), athleteIds);
         sheet.setProgramName(request.getProgramName());
@@ -129,14 +127,21 @@ public class WorkoutSheetService {
         if (request.getArchived() != null && "coach".equals(user.getRole())) {
             if (Boolean.TRUE.equals(request.getArchived()) && !Boolean.TRUE.equals(sheet.getArchived())) {
                 // Snapshot on archive - one per athlete
-                for (String athleteId : sheet.getAthleteIds()) {
-                    SheetHistorySnapshot snap = SheetHistorySnapshot.fromSheet(sheet, athleteId, "archived", 
+                if (sheet.getAthleteIds() != null && !sheet.getAthleteIds().isEmpty()) {
+                    for (String athleteId : sheet.getAthleteIds()) {
+                        SheetHistorySnapshot snap = SheetHistorySnapshot.fromSheet(sheet, athleteId, "archived", 
+                                user.getId(), user.getName());
+                        historyRepository.save(snap);
+                    }
+                } else {
+                    SheetHistorySnapshot snap = SheetHistorySnapshot.fromSheet(sheet, "", "archived", 
                             user.getId(), user.getName());
                     historyRepository.save(snap);
                 }
             }
             sheet.setArchived(request.getArchived());
         }
+
         if (request.getProgramName() != null) {
             sheet.setProgramName(request.getProgramName());
         }
@@ -203,4 +208,11 @@ public class WorkoutSheetService {
         
         return sheetRepository.save(newSheet);
     }
+
+    public List<SheetHistorySnapshot> getSheetHistory(User user, String sheetId) {
+        // Verify user has access to sheet
+        getSheet(user, sheetId);
+        return historyRepository.findBySheetIdOrderBySnapshotAtDesc(sheetId);
+    }
 }
+

@@ -1,9 +1,42 @@
 import { createContext, useContext, useState, useEffect } from "react";
 import axios from "axios";
 
-const BACKEND_URL = process.env.REACT_APP_BACKEND_URL || "https://coach-sheets-java-mysql.onrender.com";
+const getBackendUrl = () => {
+  if (typeof window !== "undefined" && window.location && window.location.origin) {
+    const host = window.location.hostname;
+    // Nel browser in produzione (VPS IP o dominio), usa sempre l'origine del server corrente
+    if (host !== "localhost" && host !== "127.0.0.1") {
+      return window.location.origin;
+    }
+  }
+  if (process.env.REACT_APP_BACKEND_URL && process.env.REACT_APP_BACKEND_URL.trim() !== "") {
+    return process.env.REACT_APP_BACKEND_URL;
+  }
+  if (typeof window !== "undefined" && window.location && window.location.origin) {
+    return window.location.origin;
+  }
+  return "";
+};
+
+const BACKEND_URL = getBackendUrl();
 export const API = `${BACKEND_URL}/api`;
-export const WS_URL = BACKEND_URL ? BACKEND_URL.replace('https://', 'wss://').replace('http://', 'ws://') : "wss://coach-sheets-java-mysql.onrender.com";
+
+const getWsUrl = () => {
+  if (typeof window !== "undefined" && window.location && window.location.host) {
+    const host = window.location.hostname;
+    if (host !== "localhost" && host !== "127.0.0.1") {
+      const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+      return `${protocol}//${window.location.host}`;
+    }
+  }
+  if (BACKEND_URL && BACKEND_URL.trim() !== "") {
+    return BACKEND_URL.replace("https://", "wss://").replace("http://", "ws://");
+  }
+  return "ws://localhost:8001";
+};
+
+export const WS_URL = getWsUrl();
+
 
 const AuthContext = createContext(null);
 export const useAuth = () => useContext(AuthContext);

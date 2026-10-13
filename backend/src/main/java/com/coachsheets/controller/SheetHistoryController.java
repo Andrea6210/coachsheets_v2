@@ -50,8 +50,9 @@ public class SheetHistoryController {
     /**
      * Get history of a specific sheet
      */
-    @GetMapping("/sheet/{sheetId}")
+    @GetMapping({"/sheet/{sheetId}", "/sheets/{sheetId}/history"})
     public List<SheetHistorySnapshot> getSheetHistory(@AuthenticationPrincipal User user,
+
                                                        @PathVariable String sheetId) {
         List<SheetHistorySnapshot> snapshots = historyRepository.findBySheetIdOrderBySnapshotAtDesc(sheetId);
         // Filter to only those the user has access to

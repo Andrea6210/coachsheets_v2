@@ -24,18 +24,21 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
     private final JwtService jwtService;
     private final UserRepository userRepository;
     private final MessageRepository messageRepository;
-    private final ObjectMapper objectMapper = new ObjectMapper();
+    private final ObjectMapper objectMapper;
     
     private final Map<String, WebSocketSession> userSessions = new ConcurrentHashMap<>();
     private final Map<String, String> sessionUserMap = new ConcurrentHashMap<>();
     
     public ChatWebSocketHandler(JwtService jwtService,
                                  UserRepository userRepository,
-                                 MessageRepository messageRepository) {
+                                 MessageRepository messageRepository,
+                                 ObjectMapper objectMapper) {
         this.jwtService = jwtService;
         this.userRepository = userRepository;
         this.messageRepository = messageRepository;
+        this.objectMapper = objectMapper;
     }
+
     
     @Override
     public void afterConnectionEstablished(WebSocketSession session) throws Exception {

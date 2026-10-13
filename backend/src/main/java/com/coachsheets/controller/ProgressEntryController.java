@@ -30,9 +30,12 @@ public class ProgressEntryController {
     @GetMapping
     public List<ProgressEntry> getProgress(@AuthenticationPrincipal User user,
                                             @PathVariable String sheetId,
-                                            @RequestParam(required = false) String athleteId) {
-        return progressService.getProgress(user, sheetId, athleteId);
+                                            @RequestParam(name = "athlete_id", required = false) String athleteIdSnake,
+                                            @RequestParam(name = "athleteId", required = false) String athleteIdCamel) {
+        String targetAthleteId = athleteIdSnake != null ? athleteIdSnake : athleteIdCamel;
+        return progressService.getProgress(user, sheetId, targetAthleteId);
     }
+
 
     @DeleteMapping("/{entryId}")
     public Map<String, String> deleteEntry(@AuthenticationPrincipal User user,

@@ -3,6 +3,7 @@ import { Toaster } from "sonner";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { ThemeProvider } from "@/contexts/ThemeContext";
 import { ProtectedRoute } from "@/components/layout/ProtectedRoute";
+import { ErrorBoundary } from "@/components/common/ErrorBoundary";
 
 // Pages
 import Landing from "@/pages/Landing";
@@ -30,20 +31,22 @@ function App() {
       <AuthProvider>
         <div className="App transition-theme bg-[#0c0e12] min-h-screen text-zinc-100">
           <BrowserRouter>
-            <Routes>
-              <Route path="/" element={<Landing />} />
-              <Route path="/login" element={<AuthPage mode="login" />} />
-              <Route path="/register" element={<AuthPage mode="register" />} />
-              <Route path="/coach" element={<ProtectedRoute><CoachDashboard /></ProtectedRoute>} />
-              <Route path="/athlete" element={<ProtectedRoute><AthleteDashboard /></ProtectedRoute>} />
-              <Route path="/atleta-profilo" element={<ProtectedRoute><AthleteProfile /></ProtectedRoute>} />
-              <Route path="/esercizi" element={<ProtectedRoute><ExerciseLibrary /></ProtectedRoute>} />
-              <Route path="/workout/:sessionId" element={<ProtectedRoute><WorkoutMode /></ProtectedRoute>} />
-              <Route path="/sheet/:sheetId" element={<ProtectedRoute><SheetEditor /></ProtectedRoute>} />
-              <Route path="/sheet/:sheetId/history" element={<ProtectedRoute><SheetHistory /></ProtectedRoute>} />
-              <Route path="/chat/:recipientId" element={<ProtectedRoute><ChatPage /></ProtectedRoute>} />
-              <Route path="/progressi" element={<ProtectedRoute><ProgressPage /></ProtectedRoute>} />
-            </Routes>
+            <ErrorBoundary>
+              <Routes>
+                <Route path="/" element={<Landing />} />
+                <Route path="/login" element={<AuthPage mode="login" />} />
+                <Route path="/register" element={<AuthPage mode="register" />} />
+                <Route path="/coach" element={<ProtectedRoute><CoachDashboard /></ProtectedRoute>} />
+                <Route path="/athlete" element={<ProtectedRoute><AthleteDashboard /></ProtectedRoute>} />
+                <Route path="/atleta-profilo" element={<ProtectedRoute><AthleteProfile /></ProtectedRoute>} />
+                <Route path="/esercizi" element={<ProtectedRoute><ExerciseLibrary /></ProtectedRoute>} />
+                <Route path="/workout/:sessionId" element={<ProtectedRoute><WorkoutMode /></ProtectedRoute>} />
+                <Route path="/sheet/:sheetId" element={<ProtectedRoute><SheetEditor /></ProtectedRoute>} />
+                <Route path="/sheet/:sheetId/history" element={<ProtectedRoute><SheetHistory /></ProtectedRoute>} />
+                <Route path="/chat/:recipientId" element={<ProtectedRoute><ChatPage /></ProtectedRoute>} />
+                <Route path="/progressi" element={<ProtectedRoute><ProgressPage /></ProtectedRoute>} />
+              </Routes>
+            </ErrorBoundary>
           </BrowserRouter>
           <Toaster position="top-right" richColors />
         </div>

@@ -1,5 +1,8 @@
 package com.coachsheets.model;
 
+import com.fasterxml.jackson.annotation.JsonAlias;
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
@@ -11,9 +14,15 @@ import java.util.UUID;
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
+@JsonIgnoreProperties(ignoreUnknown = true)
 public class WorkoutDay {
     private String id = UUID.randomUUID().toString();
     private String name = "Giorno 1";
     private List<ExerciseRow> exercises = new ArrayList<>();
     private String notes = "";
+    
+    @JsonProperty("daily_feedback")
+    @JsonAlias({"dailyFeedback", "feedback", "day_feedback", "daily_feedback"})
+    private String dailyFeedback = "";
 }
+

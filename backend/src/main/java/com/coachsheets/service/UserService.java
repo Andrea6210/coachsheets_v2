@@ -120,4 +120,25 @@ public class UserService {
             }
         }
     }
+
+    @Transactional
+    public void resetAthletePassword(User coach, String athleteId, String newPassword) {
+        if (!"coach".equals(coach.getRole())) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Solo i coach possono reimpostare la password dei loro atleti");
+        }
+
+        User athlete = userRepository.findById(athleteId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Atleta non trovato"));
+
+        if (!coach.getId().equals(athlete.getCoachId())) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Questo atleta non appartiene al tuo account");
+        }
+
+        if (newPassword == null || newPassword.length() < 4) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "La nuova password deve contenere almeno 4 caratteri");
+        }
+
+        athlete.setPassword(passwordEncoder.encode(newPassword));
+        userRepository.save(athlete);
+    }
 }

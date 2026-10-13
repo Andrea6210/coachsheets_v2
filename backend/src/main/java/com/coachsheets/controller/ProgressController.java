@@ -23,7 +23,10 @@ public class ProgressController {
 
     @GetMapping
     public List<ProgressEntry> getAllProgress(@AuthenticationPrincipal User user,
-                                               @RequestParam(required = false) String athleteId) {
-        return progressService.getAllProgressForAthlete(user, athleteId);
+                                               @RequestParam(name = "athlete_id", required = false) String athleteIdSnake,
+                                               @RequestParam(name = "athleteId", required = false) String athleteIdCamel) {
+        String targetAthleteId = athleteIdSnake != null ? athleteIdSnake : athleteIdCamel;
+        return progressService.getAllProgressForAthlete(user, targetAthleteId);
     }
 }
+

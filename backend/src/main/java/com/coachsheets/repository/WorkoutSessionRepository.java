@@ -10,5 +10,6 @@ import java.util.Optional;
 @Repository
 public interface WorkoutSessionRepository extends JpaRepository<WorkoutSession, String> {
     List<WorkoutSession> findByAthleteIdAndSheetIdOrderBySessionDateDesc(String athleteId, String sheetId);
+    List<WorkoutSession> findByAthleteIdOrderByCreatedAtDesc(String athleteId);
     Optional<WorkoutSession> findTopByAthleteIdAndProgramDayIdAndIsCompletedFalse(String athleteId, String programDayId);
 }

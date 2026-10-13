@@ -57,7 +57,7 @@ public class WorkoutSession {
     @Column(name = "day_feedback_sensations", columnDefinition = "TEXT")
     private String dayFeedbackSensations;
 
-    @OneToMany(mappedBy = "session", cascade = CascadeType.ALL, orphanRemoval = true)
+    @OneToMany(mappedBy = "session", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.EAGER)
     private List<ExerciseLog> exerciseLogs = new ArrayList<>();
 
     @Column(name = "created_at", nullable = false)

@@ -22,6 +22,7 @@ import {
 } from "lucide-react";
 import { useAuth, API } from "@/contexts/AuthContext";
 import { Navbar } from "@/components/layout/Navbar";
+import { classifyExerciseMuscle, getMuscleStyle } from "@/lib/muscleAnalytics";
 
 export default function AthleteDashboard() {
   const { user } = useAuth();
@@ -44,8 +45,8 @@ export default function AthleteDashboard() {
     }
   });
 
-  // Real completed workout logs from localStorage
-  const [completedWorkouts] = useState(() => {
+  // Real completed workout logs from localStorage and backend
+  const [completedWorkouts, setCompletedWorkouts] = useState(() => {
     try {
       const saved = localStorage.getItem(`coachsheets_completed_workouts_${user?.id || 'guest'}`);
       return saved ? JSON.parse(saved) : [];
@@ -54,6 +55,9 @@ export default function AthleteDashboard() {
     }
   });
 
+  const [muscleAnalytics, setMuscleAnalytics] = useState(null);
+  const [analyticsView, setAnalyticsView] = useState("recovery"); // "recovery" | "volume"
+
   // State for Workout Launch Modal (Week / Day Selection)
   const [selectedSheetForWorkout, setSelectedSheetForWorkout] = useState(null);
   const [selectedWeekId, setSelectedWeekId] = useState(null);
@@ -61,15 +65,46 @@ export default function AthleteDashboard() {
   const [workoutModalOpen, setWorkoutModalOpen] = useState(false);
 
   useEffect(() => {
-    fetchSheets();
-  }, []);
+    fetchData();
+  }, [user]);
 
-  const fetchSheets = async () => {
+  const fetchData = async () => {
     try {
-      const res = await axios.get(`${API}/sheets`);
-      setSheets(res.data);
+      const token = localStorage.getItem("token");
+      const headers = token ? { Authorization: `Bearer ${token}` } : {};
+
+      const [sheetsRes, sessionsRes, analyticsRes] = await Promise.allSettled([
+        axios.get(`${API}/sheets`, { headers }),
+        axios.get(`${API}/workout-sessions`, { headers }),
+        axios.get(`${API}/workout-sessions/analytics`, { headers })
+      ]);
+
+      if (sheetsRes.status === "fulfilled") {
+        setSheets(sheetsRes.value.data);
+      }
+      
+      let mergedWorkouts = [...completedWorkouts];
+      if (sessionsRes.status === "fulfilled" && Array.isArray(sessionsRes.value.data)) {
+        const backendSessions = sessionsRes.value.data.map(s => ({
+          id: s.id,
+          sheetId: s.sheetId,
+          dayName: s.dayName,
+          date: s.sessionDate,
+          timestamp: s.createdAt || s.completedAt,
+          rpe: s.dayFeedbackRpe,
+          notes: s.dayFeedbackSensations,
+          trainedMuscles: s.exerciseLogs ? s.exerciseLogs.map(el => el.exerciseName) : []
+        }));
+        const ids = new Set(backendSessions.map(b => b.id));
+        mergedWorkouts = [...backendSessions, ...completedWorkouts.filter(c => !ids.has(c.id))];
+        setCompletedWorkouts(mergedWorkouts);
+      }
+
+      if (analyticsRes.status === "fulfilled" && analyticsRes.value.data) {
+        setMuscleAnalytics(analyticsRes.value.data);
+      }
     } catch (e) {
-      toast.error("Errore nel caricamento delle schede");
+      console.warn("Errore caricamento dati atleta:", e);
     } finally {
       setLoading(false);
     }
@@ -242,6 +277,16 @@ export default function AthleteDashboard() {
           </div>
 
           <div className="flex flex-wrap items-center gap-3">
+            {sheets.length > 0 && (
+              <Button
+                onClick={() => openWorkoutLaunchModal(sheets[0])}
+                className="w-full sm:w-auto premium-button-primary gap-2 rounded-2xl text-xs sm:text-sm font-black py-2.5 px-5 shadow-xl shadow-emerald-500/25 flex items-center justify-center"
+                data-testid="hero-start-workout-btn"
+              >
+                <Play className="h-4 w-4 fill-current text-zinc-950" />
+                Avvia Allenamento
+              </Button>
+            )}
             <Button
               onClick={() => navigate(`/chat/${coachRecipientId}`)}
               variant="outline"
@@ -298,7 +343,8 @@ export default function AthleteDashboard() {
               {sheets.map((sheet) => (
                 <div
                   key={sheet.id}
-                  className="bg-zinc-900/90 border border-zinc-800 hover:border-emerald-500/50 rounded-3xl p-5 transition-all hover:bg-zinc-900 flex flex-col justify-between group shadow-xl hover:shadow-emerald-500/10"
+                  onClick={() => navigate(`/sheet/${sheet.id}`)}
+                  className="bg-zinc-900/90 border border-zinc-800 hover:border-emerald-500/50 rounded-3xl p-5 transition-all hover:bg-zinc-900 flex flex-col justify-between group shadow-xl hover:shadow-emerald-500/10 cursor-pointer"
                 >
                   <div className="space-y-3">
                     <div className="flex items-start justify-between">
@@ -318,19 +364,27 @@ export default function AthleteDashboard() {
                     </p>
                   </div>
 
-                  <div className="pt-4 mt-4 border-t border-zinc-800/80 flex items-center justify-between">
+                  <div className="pt-4 mt-4 border-t border-zinc-800/80 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5">
                     <Button
-                      onClick={() => navigate(`/sheet/${sheet.id}`)}
-                      variant="ghost"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        navigate(`/sheet/${sheet.id}`);
+                      }}
+                      variant="outline"
                       size="sm"
-                      className="text-xs text-zinc-400 hover:text-white font-medium"
+                      className="text-xs bg-zinc-900/60 border-zinc-800 text-zinc-300 hover:text-white font-medium rounded-xl h-10 order-2 sm:order-1"
+                      data-testid={`card-details-${sheet.id}`}
                     >
                       Dettagli Scheda
                     </Button>
                     <Button
-                      onClick={() => openWorkoutLaunchModal(sheet)}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        openWorkoutLaunchModal(sheet);
+                      }}
                       size="sm"
-                      className="premium-button-primary gap-1.5 rounded-xl px-4 py-2 text-xs font-black shadow-lg shadow-emerald-500/25"
+                      className="premium-button-primary gap-1.5 rounded-xl px-4 py-2 text-xs font-black shadow-lg shadow-emerald-500/25 h-10 flex items-center justify-center order-1 sm:order-2"
+                      data-testid={`card-start-workout-${sheet.id}`}
                     >
                       <Play className="h-3.5 w-3.5 fill-current" /> Inizia Workout
                     </Button>
@@ -459,64 +513,156 @@ export default function AthleteDashboard() {
 
         </div>
 
-        {/* Muscle Fatigue & Recovery Visualizer Map */}
-        <div className="bg-zinc-900/90 border border-zinc-800/90 p-6 rounded-3xl space-y-4 shadow-xl">
-          <div className="flex items-center justify-between">
+        {/* Muscle Fatigue & Real Truthful Analytics Visualizer Map */}
+        <div className="bg-zinc-900/90 border border-zinc-800/90 p-5 sm:p-6 rounded-3xl space-y-4 shadow-xl">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div className="flex items-center gap-2">
               <span className="p-2 rounded-2xl bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
                 <Activity className="h-4 w-4" />
               </span>
               <div>
-                <h3 className="text-base font-bold text-white">Stato di Recupero Muscolare</h3>
-                <p className="text-xs text-zinc-400">Calcolato in base agli allenamenti completati nelle ultime 48 ore</p>
+                <h3 className="text-base font-bold text-white">Analisi Muscolare & Recupero Reale</h3>
+                <p className="text-xs text-zinc-400">Dati veritieri registrati dalle sessioni svolte in Workout Guidato</p>
               </div>
             </div>
-            <span className="hidden sm:flex items-center gap-1 text-[11px] text-zinc-400 font-mono bg-zinc-950 px-2.5 py-1 rounded-xl border border-zinc-800">
-              <Info className="h-3.5 w-3.5 text-emerald-400" /> Stima Algoritmo
-            </span>
+
+            <div className="flex items-center gap-1.5 p-1 bg-zinc-950 rounded-2xl border border-zinc-800 self-start sm:self-auto">
+              <button
+                type="button"
+                onClick={() => setAnalyticsView("recovery")}
+                className={`px-3 py-1 text-xs font-bold rounded-xl transition-all ${
+                  analyticsView === "recovery"
+                    ? "bg-emerald-500 text-zinc-950 shadow-md shadow-emerald-500/20"
+                    : "text-zinc-400 hover:text-white"
+                }`}
+              >
+                Mappa Recupero (48h)
+              </button>
+              <button
+                type="button"
+                onClick={() => setAnalyticsView("volume")}
+                className={`px-3 py-1 text-xs font-bold rounded-xl transition-all ${
+                  analyticsView === "volume"
+                    ? "bg-emerald-500 text-zinc-950 shadow-md shadow-emerald-500/20"
+                    : "text-zinc-400 hover:text-white"
+                }`}
+              >
+                Volume & Carichi Reali
+              </button>
+            </div>
           </div>
 
-          <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-3">
-            {muscleFatigue.map((m) => (
-              <div key={m.name} className="bg-zinc-950/80 border border-zinc-800/80 p-3 rounded-2xl space-y-2 text-center">
-                <p className="text-xs font-bold text-white">{m.name}</p>
-                <div className="h-1.5 w-full bg-zinc-900 rounded-full overflow-hidden">
-                  <div 
-                    className={`h-full rounded-full ${m.percent >= 80 ? 'bg-emerald-400' : 'bg-amber-400'}`}
-                    style={{ width: `${m.percent}%` }}
-                  />
-                </div>
-                <span className={`inline-block text-[10px] font-bold px-2 py-0.5 rounded border ${m.color}`}>
-                  {m.level}
-                </span>
+          {analyticsView === "recovery" ? (
+            <div className="space-y-3 pt-1">
+              <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-3">
+                {muscleFatigue.map((m) => (
+                  <div key={m.name} className="bg-zinc-950/80 border border-zinc-800/80 p-3 rounded-2xl space-y-2 text-center">
+                    <p className="text-xs font-bold text-white">{m.name}</p>
+                    <div className="h-1.5 w-full bg-zinc-900 rounded-full overflow-hidden">
+                      <div 
+                        className={`h-full rounded-full ${m.percent >= 80 ? 'bg-emerald-400' : 'bg-amber-400'}`}
+                        style={{ width: `${m.percent}%` }}
+                      />
+                    </div>
+                    <span className={`inline-block text-[10px] font-bold px-2 py-0.5 rounded border ${m.color}`}>
+                      {m.level}
+                    </span>
+                  </div>
+                ))}
               </div>
-            ))}
-          </div>
+              <p className="text-[11px] text-zinc-500 text-center italic pt-1">
+                Lo stato si aggiorna automaticamente ogni volta che avvii e completi un workout.
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-4 pt-1">
+              {/* Summary KPIs */}
+              <div className="grid grid-cols-3 gap-2">
+                <div className="bg-zinc-950 p-3 rounded-2xl border border-zinc-800 text-center">
+                  <span className="text-[10px] font-mono text-zinc-400 uppercase block">Sessioni Registrate</span>
+                  <span className="text-base sm:text-lg font-black text-emerald-400 font-mono">
+                    {muscleAnalytics?.totalSessions ?? completedWorkouts.length}
+                  </span>
+                </div>
+                <div className="bg-zinc-950 p-3 rounded-2xl border border-zinc-800 text-center">
+                  <span className="text-[10px] font-mono text-zinc-400 uppercase block">Serie Svolte Reali</span>
+                  <span className="text-base sm:text-lg font-black text-sky-400 font-mono">
+                    {muscleAnalytics?.grandTotalSets ?? completedWorkouts.reduce((acc, w) => acc + (w.totalSets || 0), 0)}
+                  </span>
+                </div>
+                <div className="bg-zinc-950 p-3 rounded-2xl border border-zinc-800 text-center">
+                  <span className="text-[10px] font-mono text-zinc-400 uppercase block">Tonnellaggio Reale</span>
+                  <span className="text-base sm:text-lg font-black text-amber-400 font-mono">
+                    {muscleAnalytics?.grandTotalTonnageKg?.toLocaleString() ?? 
+                      completedWorkouts.reduce((acc, w) => acc + (w.totalTonnage || 0), 0).toLocaleString()} kg
+                  </span>
+                </div>
+              </div>
+
+              {/* Muscle Details List */}
+              {(!muscleAnalytics?.muscles || muscleAnalytics.muscles.length === 0) && completedWorkouts.length === 0 ? (
+                <div className="p-6 text-center border border-dashed border-zinc-800 rounded-2xl bg-zinc-950/40 space-y-1">
+                  <p className="text-xs text-zinc-400">Nessun dato di allenamento ancora registrato.</p>
+                  <p className="text-[11px] text-emerald-400 font-medium">Premi &quot;Avvia Workout&quot; per iniziare a tracciare i tuoi carichi e muscoli reali!</p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                  {(muscleAnalytics?.muscles || []).map((m) => {
+                    const style = getMuscleStyle(m.muscleGroup);
+                    return (
+                      <div key={m.muscleGroup} className="bg-zinc-950/80 border border-zinc-800/80 p-3.5 rounded-2xl space-y-2">
+                        <div className="flex items-center justify-between">
+                          <span className={`text-xs font-bold ${style.text}`}>{m.muscleGroup}</span>
+                          <span className={`text-[10px] font-bold px-2 py-0.5 rounded border ${
+                            m.badgeColor === 'amber' 
+                              ? 'text-amber-400 bg-amber-500/10 border-amber-500/30' 
+                              : 'text-emerald-400 bg-emerald-500/10 border-emerald-500/30'
+                          }`}>
+                            {m.recoveryStatus}
+                          </span>
+                        </div>
+                        <div className="flex items-baseline justify-between text-xs font-mono">
+                          <span className="text-zinc-400">Serie totali: <strong className="text-white">{m.totalSets}</strong></span>
+                          <span className="text-zinc-400">Kg: <strong className="text-amber-400">{m.totalTonnage?.toLocaleString()}</strong></span>
+                        </div>
+                        <div className="flex items-center justify-between text-[11px] text-zinc-500 pt-1 border-t border-zinc-900">
+                          <span>Ultimi 7 gg: <strong className="text-emerald-400 font-mono">{m.recentSets7d} serie</strong></span>
+                          <span>{m.lastTrainedDate ? `Ultimo: ${m.lastTrainedDate}` : 'Mai registrato'}</span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
       </main>
 
       {/* Workout Launch Modal (Choose Week & Day before starting) */}
       <Dialog open={workoutModalOpen} onOpenChange={setWorkoutModalOpen}>
-        <DialogContent className="bg-zinc-950 border-zinc-800 text-white rounded-3xl max-w-lg p-6">
-          <DialogHeader>
-            <div className="flex items-center gap-2">
-              <span className="p-2 rounded-xl bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-                <Dumbbell className="h-5 w-5" />
-              </span>
-              <div>
-                <DialogTitle className="text-lg font-black text-white">
-                  Seleziona Sessione di Allenamento
-                </DialogTitle>
-                <p className="text-xs text-zinc-400 mt-0.5">
-                  Scegli la settimana ed il giorno per avviare il workout guidato
-                </p>
+        <DialogContent className="bg-zinc-950 border-zinc-800 text-white rounded-3xl w-[94vw] sm:max-w-lg max-h-[85dvh] flex flex-col p-0 overflow-hidden shadow-2xl z-[100]">
+          <div className="p-5 sm:p-6 pb-3 border-b border-zinc-800/80 shrink-0">
+            <DialogHeader>
+              <div className="flex items-center gap-3">
+                <span className="p-2.5 rounded-2xl bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                  <Dumbbell className="h-5 w-5" />
+                </span>
+                <div className="text-left">
+                  <DialogTitle className="text-base sm:text-lg font-black text-white">
+                    Seleziona Sessione di Allenamento
+                  </DialogTitle>
+                  <p className="text-xs text-zinc-400 mt-0.5">
+                    Scegli la settimana ed il giorno per avviare il workout guidato
+                  </p>
+                </div>
               </div>
-            </div>
-          </DialogHeader>
+            </DialogHeader>
+          </div>
 
           {selectedSheetForWorkout && (
-            <div className="space-y-5 py-3">
+            <div className="flex-1 overflow-y-auto p-5 sm:p-6 space-y-5">
               {/* Select Week */}
               <div className="space-y-2">
                 <label className="text-xs font-bold text-zinc-400 uppercase tracking-wider">1. Seleziona Settimana</label>
@@ -543,24 +689,24 @@ export default function AthleteDashboard() {
               {/* Select Day */}
               <div className="space-y-2">
                 <label className="text-xs font-bold text-zinc-400 uppercase tracking-wider">2. Seleziona Giorno di Allenamento</label>
-                <div className="space-y-1.5">
+                <div className="space-y-2">
                   {(activeWeekInModal?.days || [{ id: 'd1', name: 'Giorno 1 - Upper Body', exercises: [] }]).map((day) => (
                     <button
                       key={day.id}
                       onClick={() => setSelectedDayId(day.id)}
-                      className={`w-full flex items-center justify-between p-3 rounded-2xl transition-all text-left border ${
+                      className={`w-full flex items-center justify-between p-3 sm:p-3.5 rounded-2xl transition-all text-left border ${
                         selectedDayId === day.id
-                          ? "bg-zinc-900 border-emerald-500/60 text-white shadow-md shadow-emerald-500/10"
+                          ? "bg-zinc-900 border-emerald-500/60 text-white shadow-md shadow-emerald-500/10 ring-1 ring-emerald-500/30"
                           : "bg-zinc-900/60 border-zinc-800/80 text-zinc-400 hover:bg-zinc-900 hover:text-zinc-200"
                       }`}
                     >
                       <div>
-                        <p className="text-xs font-bold text-white">{day.name || "Giorno"}</p>
+                        <p className="text-xs sm:text-sm font-bold text-white">{day.name || "Giorno"}</p>
                         <p className="text-[11px] text-zinc-400 mt-0.5 font-mono">
                           {day.exercises?.length || 0} Esercizi in programma
                         </p>
                       </div>
-                      <ChevronRight className={`h-4 w-4 ${selectedDayId === day.id ? 'text-emerald-400' : 'text-zinc-600'}`} />
+                      <ChevronRight className={`h-4 w-4 shrink-0 ${selectedDayId === day.id ? 'text-emerald-400' : 'text-zinc-600'}`} />
                     </button>
                   ))}
                 </div>
@@ -568,9 +714,9 @@ export default function AthleteDashboard() {
 
               {/* Preview of exercises for selected day */}
               {activeDayInModal && activeDayInModal.exercises && activeDayInModal.exercises.length > 0 && (
-                <div className="bg-zinc-900/80 border border-zinc-800 p-3 rounded-2xl space-y-2">
+                <div className="bg-zinc-900/80 border border-zinc-800 p-3 sm:p-3.5 rounded-2xl space-y-2">
                   <p className="text-[10px] font-bold uppercase text-zinc-400 tracking-wider">Esercizi in questa sessione:</p>
-                  <div className="flex flex-wrap gap-1">
+                  <div className="flex flex-wrap gap-1.5">
                     {activeDayInModal.exercises.map((ex, idx) => (
                       <span key={idx} className="text-[11px] bg-zinc-950 text-emerald-400 px-2.5 py-1 rounded-lg border border-zinc-800 font-medium">
                         {ex.exercise || "Esercizio"} ({ex.sets || 3}x{ex.reps || 8})
@@ -582,14 +728,15 @@ export default function AthleteDashboard() {
             </div>
           )}
 
-          <DialogFooter>
+          <div className="p-4 sm:p-5 border-t border-zinc-800 bg-zinc-950/95 sticky bottom-0 shrink-0">
             <Button
               onClick={handleStartGuidedWorkout}
-              className="w-full premium-button-primary rounded-2xl text-sm font-black py-3 shadow-xl shadow-emerald-500/25"
+              className="w-full premium-button-primary rounded-2xl text-sm font-black py-3.5 shadow-xl shadow-emerald-500/25 flex items-center justify-center gap-2"
+              data-testid="modal-start-workout-btn"
             >
               <Play className="h-4 w-4 mr-2 fill-current" /> Avvia Sessione Guidata
             </Button>
-          </DialogFooter>
+          </div>
         </DialogContent>
       </Dialog>
 

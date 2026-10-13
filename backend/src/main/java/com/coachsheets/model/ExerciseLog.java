@@ -23,6 +23,7 @@ public class ExerciseLog {
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "session_id", nullable = false)
+    @com.fasterxml.jackson.annotation.JsonIgnore
     private WorkoutSession session;
 
     @Column(name = "program_exercise_id", length = 36)
@@ -45,7 +46,7 @@ public class ExerciseLog {
     @Column(name = "athlete_video_url", columnDefinition = "TEXT")
     private String athleteVideoUrl;
 
-    @OneToMany(mappedBy = "exerciseLog", cascade = CascadeType.ALL, orphanRemoval = true)
+    @OneToMany(mappedBy = "exerciseLog", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.EAGER)
     private List<SetLog> sets = new ArrayList<>();
 
     public static ExerciseLog create(WorkoutSession session, String programExerciseId, String exerciseName, Integer orderIndex) {

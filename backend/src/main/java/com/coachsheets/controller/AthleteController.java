@@ -2,6 +2,7 @@ package com.coachsheets.controller;
 
 import com.coachsheets.dto.CreateAthleteRequest;
 import com.coachsheets.dto.LinkAthleteRequest;
+import com.coachsheets.dto.ResetAthletePasswordRequest;
 import com.coachsheets.dto.UserResponse;
 import com.coachsheets.model.User;
 import com.coachsheets.service.UserService;
@@ -43,5 +44,13 @@ public class AthleteController {
                                               @PathVariable String athleteId) {
         userService.deleteAthlete(user, athleteId);
         return Map.of("message", "Athlete deleted");
+    }
+
+    @PostMapping("/{athleteId}/reset-password")
+    public Map<String, String> resetAthletePassword(@AuthenticationPrincipal User user,
+                                                    @PathVariable String athleteId,
+                                                    @RequestBody ResetAthletePasswordRequest request) {
+        userService.resetAthletePassword(user, athleteId, request.getNewPassword());
+        return Map.of("message", "Password dell'atleta reimpostata con successo");
     }
 }

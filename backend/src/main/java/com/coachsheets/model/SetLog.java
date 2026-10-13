@@ -19,6 +19,7 @@ public class SetLog {
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "exercise_log_id", nullable = false)
+    @com.fasterxml.jackson.annotation.JsonIgnore
     private ExerciseLog exerciseLog;
 
     @Column(name = "set_number", nullable = false)

@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect } from "react";
+import React, { useState, useEffect } from "react";
 import { useNavigate, useParams, Link } from "react-router-dom";
 import axios from "axios";
 import { toast } from "sonner";
@@ -34,10 +34,15 @@ const SheetHistory = () => {
 
   const fetchHistory = async () => {
     try {
-      const res = await axios.get(`${API}/sheets/${sheetId}/history`);
-      setHistory(res.data);
+      let res;
+      try {
+        res = await axios.get(`${API}/sheets/${sheetId}/history`);
+      } catch (err) {
+        res = await axios.get(`${API}/history/sheet/${sheetId}`);
+      }
+      setHistory(Array.isArray(res.data) ? res.data : []);
     } catch (e) {
-      toast.error("Errore nel caricamento");
+      toast.error("Errore nel caricamento della cronologia");
     } finally {
       setLoading(false);
     }
@@ -67,25 +72,33 @@ const SheetHistory = () => {
           </Card>
         ) : (
           <div className="space-y-4">
-            {history.map((entry) => (
-              <Card key={entry.id} data-testid={`history-entry-${entry.id}`}>
-                <CardContent className="p-4">
-                  <div className="flex justify-between items-start">
-                    <div>
-                      <p className="font-medium">{entry.user_name}</p>
-                      <p className="text-sm text-muted-foreground">
-                        {entry.action === "update" ? "Ha modificato la scheda" : entry.action}
+            {history.map((entry) => {
+              const userName = entry.user_name || entry.modified_by_name || entry.modifiedByName || "Utente";
+              const action = entry.action || entry.reason || "update";
+              const dateVal = entry.timestamp || entry.snapshot_at || entry.snapshotAt;
+              const formattedDate = dateVal ? new Date(dateVal).toLocaleString('it-IT') : "Data sconosciuta";
+
+              return (
+                <Card key={entry.id} data-testid={`history-entry-${entry.id}`}>
+                  <CardContent className="p-4">
+                    <div className="flex justify-between items-start">
+                      <div>
+                        <p className="font-medium">{userName}</p>
+                        <p className="text-sm text-muted-foreground">
+                          {action === "update" ? "Ha modificato la scheda" : action === "archived" ? "Ha archiviato la scheda" : action}
+                        </p>
+                      </div>
+                      <p className="text-xs text-muted-foreground">
+                        {formattedDate}
                       </p>
                     </div>
-                    <p className="text-xs text-muted-foreground">
-                      {new Date(entry.timestamp).toLocaleString('it-IT')}
-                    </p>
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
+                  </CardContent>
+                </Card>
+              );
+            })}
           </div>
         )}
+
       </main>
     </div>
   );

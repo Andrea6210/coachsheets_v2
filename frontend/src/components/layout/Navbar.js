@@ -27,15 +27,14 @@ export const Navbar = () => {
   const homePath = isAthlete ? "/athlete" : "/coach";
 
   const navItems = isAthlete ? [
-    { label: "Home", icon: Home, path: "/athlete" },
-    { label: "Atleta", icon: User, path: "/atleta-profilo" },
-    { label: "Esercizi", icon: BookOpen, path: "/esercizi" },
+    { label: "Allenamenti", icon: Dumbbell, path: "/athlete" },
     { label: "Progressi", icon: TrendingUp, path: "/progressi" },
+    { label: "Esercizi", icon: BookOpen, path: "/esercizi" },
     { label: "Chat", icon: MessageSquare, path: `/chat/${user.coachId || user.coach_id || 'coach'}` },
   ] : [
     { label: "Dashboard", icon: Home, path: "/coach" },
-    { label: "Esercizi", icon: BookOpen, path: "/esercizi" },
     { label: "Progressi", icon: TrendingUp, path: "/progressi" },
+    { label: "Esercizi", icon: BookOpen, path: "/esercizi" },
     { label: "Chat", icon: MessageSquare, path: "/chat/athlete" },
   ];
 

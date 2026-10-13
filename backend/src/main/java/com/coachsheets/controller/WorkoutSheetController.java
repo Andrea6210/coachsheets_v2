@@ -64,4 +64,11 @@ public class WorkoutSheetController {
                                         @RequestBody DuplicateSheetRequest request) {
         return sheetService.duplicateSheet(user, sheetId, request.getAthleteIds());
     }
+
+    @GetMapping("/{sheetId}/history")
+    public List<com.coachsheets.model.SheetHistorySnapshot> getSheetHistory(@AuthenticationPrincipal User user,
+                                                                             @PathVariable String sheetId) {
+        return sheetService.getSheetHistory(user, sheetId);
+    }
 }
+

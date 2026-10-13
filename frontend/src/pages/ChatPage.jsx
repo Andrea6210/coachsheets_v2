@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect } from "react";
+import React, { useState, useEffect } from "react";
 import { useNavigate, useParams, Link } from "react-router-dom";
 import axios from "axios";
 import { toast } from "sonner";
@@ -72,16 +72,24 @@ const ChatPage = () => {
     const websocket = new WebSocket(`${WS_URL}/ws/chat/${user.id}?token=${token}`);
     
     websocket.onmessage = (event) => {
-      const data = JSON.parse(event.data);
-      if (data.type === "new_message" && data.message.sender_id === recipientId) {
-        setMessages(prev => [...prev, data.message]);
-      } else if (data.type === "message_sent") {
-        setMessages(prev => [...prev, data.message]);
+      try {
+        const data = JSON.parse(event.data);
+        if (data.type === "new_message" && data.message) {
+          const senderId = data.message.sender_id || data.message.senderId;
+          if (senderId === recipientId) {
+            setMessages(prev => [...prev, data.message]);
+          }
+        } else if (data.type === "message_sent" && data.message) {
+          setMessages(prev => [...prev, data.message]);
+        }
+      } catch (err) {
+        console.error("WS error parsing message:", err);
       }
     };
 
     setWs(websocket);
   };
+
 
   const sendMessage = () => {
     if (!newMessage.trim()) return;
@@ -139,26 +147,33 @@ const ChatPage = () => {
                 <p className="text-muted-foreground">Nessun messaggio. Inizia la conversazione!</p>
               </div>
             ) : (
-              messages.map((msg) => (
-                <div
-                  key={msg.id}
-                  className={`flex ${msg.sender_id === user.id ? "justify-end" : "justify-start"}`}
-                  data-testid={`message-${msg.id}`}
-                >
+              messages.map((msg) => {
+                const isSentByMe = (msg.sender_id === user.id) || (msg.senderId === user.id);
+                const createdDate = msg.created_at || msg.createdAt;
+                const formattedTime = createdDate ? new Date(createdDate).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' }) : "";
+
+                return (
                   <div
-                    className={`max-w-[70%] px-4 py-2 ${
-                      msg.sender_id === user.id 
-                        ? "chat-bubble-sent" 
-                        : "chat-bubble-received"
-                    }`}
+                    key={msg.id}
+                    className={`flex ${isSentByMe ? "justify-end" : "justify-start"}`}
+                    data-testid={`message-${msg.id}`}
                   >
-                    <p className="text-sm">{msg.content}</p>
-                    <p className={`text-xs mt-1 ${msg.sender_id === user.id ? "text-primary-foreground/70" : "text-muted-foreground"}`}>
-                      {new Date(msg.created_at).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })}
-                    </p>
+                    <div
+                      className={`max-w-[70%] px-4 py-2 ${
+                        isSentByMe 
+                          ? "chat-bubble-sent" 
+                          : "chat-bubble-received"
+                      }`}
+                    >
+                      <p className="text-sm">{msg.content}</p>
+                      <p className={`text-xs mt-1 ${isSentByMe ? "text-primary-foreground/70" : "text-muted-foreground"}`}>
+                        {formattedTime}
+                      </p>
+                    </div>
                   </div>
-                </div>
-              ))
+                );
+              })
+
             )}
             <div ref={messagesEndRef} />
           </div>
