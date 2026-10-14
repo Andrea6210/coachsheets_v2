@@ -1,5 +1,8 @@
 {
   "appId": "com.coachsheets.app",
   "appName": "CoachSheets",
-  "webDir": "build"
+  "webDir": "build",
+  "server": {
+    "cleartext": true
+  }
 }

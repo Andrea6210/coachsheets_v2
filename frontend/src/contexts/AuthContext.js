@@ -12,10 +12,8 @@ const getBackendUrl = () => {
   if (process.env.REACT_APP_BACKEND_URL && process.env.REACT_APP_BACKEND_URL.trim() !== "") {
     return process.env.REACT_APP_BACKEND_URL;
   }
-  if (typeof window !== "undefined" && window.location && window.location.origin) {
-    return window.location.origin;
-  }
-  return "";
+  // Fallback predefinito per app Android (Capacitor localhost) al server Ionos
+  return "http://217.154.114.104";
 };
 
 const BACKEND_URL = getBackendUrl();
@@ -32,7 +30,7 @@ const getWsUrl = () => {
   if (BACKEND_URL && BACKEND_URL.trim() !== "") {
     return BACKEND_URL.replace("https://", "wss://").replace("http://", "ws://");
   }
-  return "ws://localhost:8001";
+  return "ws://217.154.114.104";
 };
 
 export const WS_URL = getWsUrl();
