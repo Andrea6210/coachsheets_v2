@@ -213,8 +213,43 @@ const ProgressPage = () => {
   const fetchEntries = async (athleteId) => {
     setLoading(true);
     try {
-      const res = await axios.get(`${API}/progress`, { params: athleteId ? { athlete_id: athleteId } : {} });
-      setEntries(res.data);
+      let backendEntries = [];
+      try {
+        const res = await axios.get(`${API}/progress`, { params: athleteId ? { athlete_id: athleteId } : {} });
+        backendEntries = Array.isArray(res.data) ? res.data : [];
+      } catch (e) {
+        // Fallback silenzioso se offline
+      }
+
+      let localEntries = [];
+      try {
+        const pKeys = [`coachsheets_progress_entries_${user?.id}`, 'coachsheets_progress_entries_guest'].filter(Boolean);
+        const seenLocalPrg = new Set();
+        for (const k of pKeys) {
+          const raw = localStorage.getItem(k);
+          if (raw) {
+            const parsed = JSON.parse(raw);
+            if (Array.isArray(parsed)) {
+              parsed.forEach(p => {
+                const uniqueKey = p.id || `${p.exercise_name || p.exerciseName}_${p.date}_${p.weight}_${p.reps}`;
+                if (!seenLocalPrg.has(uniqueKey)) {
+                  seenLocalPrg.add(uniqueKey);
+                  localEntries.push(p);
+                }
+              });
+            }
+          }
+        }
+      } catch {}
+
+      const existingKeys = new Set(
+        backendEntries.map(b => `${(b.exercise_name || b.exerciseName || '').toLowerCase()}_${b.date}_${b.weight}_${b.reps}`)
+      );
+      const uniqueLocal = localEntries.filter(l => 
+        !existingKeys.has(`${(l.exercise_name || l.exerciseName || '').toLowerCase()}_${l.date}_${l.weight}_${l.reps}`)
+      );
+
+      setEntries([...backendEntries, ...uniqueLocal]);
     } catch (e) {
       toast.error("Errore nel caricamento dei progressi");
     } finally {
@@ -226,11 +261,26 @@ const ProgressPage = () => {
     if (!window.confirm("Eliminare questa registrazione?")) return;
     const sheetId = entry.sheet_id || entry.sheetId;
     try {
-      await axios.delete(`${API}/sheets/${sheetId}/progress/${entry.id}`);
-      setEntries(prev => prev.filter(e => e.id !== entry.id));
+      if (entry.id && !String(entry.id).startsWith("prg_") && sheetId) {
+        await axios.delete(`${API}/sheets/${sheetId}/progress/${entry.id}`);
+      }
     } catch (e) {
-      toast.error(e.response?.data?.detail || e.response?.data?.message || "Errore nell'eliminazione");
+      // Ignora se non presente su backend
     }
+
+    try {
+      const pKeys = [`coachsheets_progress_entries_${user?.id}`, 'coachsheets_progress_entries_guest'].filter(Boolean);
+      for (const k of pKeys) {
+        try {
+          const existing = JSON.parse(localStorage.getItem(k) || '[]');
+          const filtered = existing.filter(l => l.id !== entry.id);
+          localStorage.setItem(k, JSON.stringify(filtered));
+        } catch {}
+      }
+    } catch {}
+
+    setEntries(prev => prev.filter(e => e.id !== entry.id));
+    toast.success("Registrazione rimossa");
   };
 
   const parseWeightValue = (weight) => {

@@ -8,7 +8,7 @@ import { Slider } from "@/components/ui/slider";
 import { Badge } from "@/components/ui/badge";
 import { 
   Check, Clock, X, Dumbbell, ChevronRight, ChevronLeft, ArrowLeft, Trophy, Zap, Plus,
-  Timer, Volume2, VolumeX, Sparkles, Layers, Disc, Activity
+  Timer, Volume2, VolumeX, Sparkles, Layers, Disc, Activity, Percent
 } from "lucide-react";
 import { Calculator } from "@/features/calculator/Calculator";
 import { PlateCalculatorModal } from "@/features/calculator/PlateCalculatorModal";
@@ -52,6 +52,10 @@ export default function WorkoutMode() {
   // Calcolatore Piastre sul bilanciere
   const [plateCalcOpen, setPlateCalcOpen] = useState(false);
   const [plateCalcWeight, setPlateCalcWeight] = useState(80);
+
+  // Tool modali: Cronometro/Timer e Calcolatore Percentuali
+  const [toolboxOpen, setToolboxOpen] = useState(false);
+  const [calcModalOpen, setCalcModalOpen] = useState(false);
 
   const adjustWeight = (exerciseId, setIndex, delta) => {
     const key = `${exerciseId}-${setIndex}`;
@@ -215,11 +219,21 @@ export default function WorkoutMode() {
         const loggedSets = [];
         for (let i = 0; i < setsCount; i++) {
           const log = setLogs[`${ex.id}-${i}`];
-          if (log && log.completed) {
+          const detailedSet = ex.set_details?.[i];
+          const fallbackWeight = detailedSet?.weight ? parseFloat(detailedSet.weight) : (parseFloat(ex.lastWeight) || 0);
+          const fallbackReps = detailedSet?.reps ? parseInt(detailedSet.reps) : (parseInt(ex.targetReps) || 8);
+
+          // Considera valido se esplicitamente spuntato o se sono stati inseriti/modificati valori
+          const isExplicitlyDone = Boolean(log && log.completed);
+          const hasEnteredValues = Boolean(log && ((log.weight !== undefined && log.weight !== '') || (log.reps !== undefined && log.reps !== '')));
+
+          if (isExplicitlyDone || hasEnteredValues) {
+            const finalWeight = (log?.weight !== undefined && log?.weight !== '') ? parseFloat(log.weight) : fallbackWeight;
+            const finalReps = (log?.reps !== undefined && log?.reps !== '') ? parseInt(log.reps) : fallbackReps;
             loggedSets.push({
               setNumber: i + 1,
-              weight: parseFloat(log.weight) || 0,
-              reps: parseInt(log.reps) || 0,
+              weight: isNaN(finalWeight) ? 0 : Math.max(0, finalWeight),
+              reps: isNaN(finalReps) ? 0 : Math.max(0, finalReps),
               completed: true
             });
           }
@@ -233,15 +247,85 @@ export default function WorkoutMode() {
         };
       });
 
-      const impact = computeSessionMuscleImpact(session.exercises, setLogs);
+      // Calcola con precisione serie totali, tonnellaggio e scomposizione muscolare reale
+      let totalSetsCompleted = 0;
+      let totalTonnageKg = 0;
+      let totalRepsCount = 0;
+      const muscleMap = {};
 
+      completedExercises.forEach(ex => {
+        const classification = classifyExerciseMuscle(ex.name);
+        const primary = classification.primary;
+
+        ex.sets.forEach(st => {
+          totalSetsCompleted++;
+          const w = parseFloat(st.weight) || 0;
+          const r = parseInt(st.reps) || 0;
+          const setTonnage = w * r;
+          totalTonnageKg += setTonnage;
+          totalRepsCount += r;
+
+          if (primary) {
+            if (!muscleMap[primary]) {
+              muscleMap[primary] = {
+                muscle: primary,
+                completedSets: 0,
+                totalReps: 0,
+                tonnageKg: 0,
+                exercises: []
+              };
+            }
+            muscleMap[primary].completedSets += 1;
+            muscleMap[primary].totalReps += r;
+            muscleMap[primary].tonnageKg += setTonnage;
+            if (!muscleMap[primary].exercises.includes(ex.name)) {
+              muscleMap[primary].exercises.push(ex.name);
+            }
+          }
+        });
+      });
+
+      const muscleBreakdown = Object.values(muscleMap).sort((a, b) => b.completedSets - a.completedSets);
+      const trainedMuscles = muscleBreakdown.map(m => m.muscle);
+
+      const now = new Date();
+      const todayIso = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+      const nowIso = now.toISOString();
+
+      // Payload compatibile sia con snake_case che camelCase per il backend Spring Boot
       const payload = {
         sheetId: sessionId,
+        sheet_id: sessionId,
+        athleteId: user?.id,
+        athlete_id: user?.id,
         rpe,
         generalNotes: notes,
-        sessionDate: new Date().toISOString().substring(0, 10),
+        general_notes: notes,
+        sessionDate: todayIso,
+        session_date: todayIso,
         dayName: session.dayName,
-        exercises: completedExercises
+        day_name: session.dayName,
+        exercises: completedExercises.map(ex => ({
+          ...ex,
+          exerciseId: ex.exerciseId,
+          exercise_id: ex.exerciseId,
+          orderIndex: ex.orderIndex,
+          order_index: ex.orderIndex,
+          sets: ex.sets.map(s => ({
+            ...s,
+            setNumber: s.setNumber,
+            set_number: s.setNumber,
+            weight: s.weight,
+            actualWeight: s.weight,
+            actual_weight: s.weight,
+            reps: s.reps,
+            actualReps: s.reps,
+            actual_reps: s.reps,
+            completed: true,
+            isCompleted: true,
+            is_completed: true
+          }))
+        }))
       };
 
       const currentToken = localStorage.getItem("token") || token;
@@ -258,37 +342,112 @@ export default function WorkoutMode() {
         console.warn("Salvataggio workout-session su backend completato con fallback:", backendErr);
       }
 
-      // Salva sempre anche nel localStorage per aggiornare istantaneamente la dashboard atleta
+      // Salva sempre anche nel localStorage (chiave utente e guest) per aggiornare istantaneamente la dashboard
       try {
-        const storageKey = `coachsheets_completed_workouts_${user?.id || 'guest'}`;
-        const existing = JSON.parse(localStorage.getItem(storageKey) || '[]');
         const newEntry = {
           id: savedSessionId,
           sheetId: sessionId,
+          sheet_id: sessionId,
           dayName: session.dayName,
-          date: new Date().toISOString().substring(0, 10),
-          timestamp: new Date().toISOString(),
+          day_name: session.dayName,
+          date: todayIso,
+          session_date: todayIso,
+          timestamp: nowIso,
+          created_at: nowIso,
+          completed_at: nowIso,
           rpe,
           notes,
-          totalSets: impact.totalSetsCompleted,
-          totalTonnage: impact.totalTonnageKg,
-          trainedMuscles: impact.muscles.map(m => m.muscle),
-          muscleBreakdown: impact.muscles
+          totalSets: totalSetsCompleted,
+          totalTonnage: Math.round(totalTonnageKg * 10) / 10,
+          trainedMuscles,
+          trained_muscles: trainedMuscles,
+          muscleBreakdown,
+          muscle_breakdown: muscleBreakdown,
+          exerciseLogs: completedExercises,
+          exercise_logs: completedExercises
         };
-        const updatedWorkouts = [newEntry, ...existing.filter(e => e.id !== savedSessionId)];
-        localStorage.setItem(storageKey, JSON.stringify(updatedWorkouts));
+
+        const targetStorageKeys = [`coachsheets_completed_workouts_${user?.id}`, 'coachsheets_completed_workouts_guest'].filter(Boolean);
+        for (const storageKey of targetStorageKeys) {
+          try {
+            const existing = JSON.parse(localStorage.getItem(storageKey) || '[]');
+            const updatedWorkouts = [newEntry, ...existing.filter(e => e.id !== savedSessionId)];
+            localStorage.setItem(storageKey, JSON.stringify(updatedWorkouts));
+          } catch {}
+        }
       } catch (lsErr) {
         console.error("Errore salvataggio localStorage:", lsErr);
       }
 
-      // Aggiorna feedback sulla scheda (se associata)
+      // Salva automaticamente le registrazioni carichi per la pagina Progressi (/progressi)
+      try {
+        const newProgressList = [];
+
+        for (const ex of completedExercises) {
+          if (ex.sets && ex.sets.length > 0) {
+            const topSet = ex.sets.reduce((prev, curr) => (curr.weight > (prev?.weight || 0) ? curr : prev), ex.sets[0]);
+            if (topSet && (topSet.weight > 0 || topSet.reps > 0)) {
+              const weightStr = topSet.weight > 0 ? `${topSet.weight}kg` : "0kg";
+              const progressEntry = {
+                id: `prg_${Date.now()}_${ex.exerciseId}`,
+                sheet_id: sessionId,
+                sheetId: sessionId,
+                exercise_name: ex.name,
+                exerciseName: ex.name,
+                week_label: session.dayName,
+                weekLabel: session.dayName,
+                weight: weightStr,
+                reps: `${topSet.reps || 0}`,
+                date: todayIso,
+                logged_by_name: user?.name || "Atleta",
+                logged_by_role: "athlete"
+              };
+              newProgressList.push(progressEntry);
+
+              if (sessionId && currentToken) {
+                try {
+                  await axios.post(`${API}/sheets/${sessionId}/progress`, {
+                    athleteId: user?.id,
+                    athlete_id: user?.id,
+                    exerciseName: ex.name,
+                    exercise_name: ex.name,
+                    weekLabel: session.dayName,
+                    week_label: session.dayName,
+                    weight: weightStr,
+                    reps: `${topSet.reps || 0}`,
+                    date: todayIso
+                  }, {
+                    headers: { Authorization: `Bearer ${currentToken}` }
+                  });
+                } catch (e) {
+                  // Fallback su storage locale
+                }
+              }
+            }
+          }
+        }
+
+        if (newProgressList.length > 0) {
+          const pKeys = [`coachsheets_progress_entries_${user?.id}`, 'coachsheets_progress_entries_guest'].filter(Boolean);
+          for (const k of pKeys) {
+            try {
+              const existingProgress = JSON.parse(localStorage.getItem(k) || '[]');
+              localStorage.setItem(k, JSON.stringify([...newProgressList, ...existingProgress]));
+            } catch {}
+          }
+        }
+      } catch (prgErr) {
+        console.warn("Registrazione progressi completata con fallback:", prgErr);
+      }
+
+      // Aggiorna feedback e pesi sulla scheda (se associata)
       if (sessionId) {
         try {
           const sheetRes = await axios.get(`${API}/sheets/${sessionId}`);
           const currentSheet = sheetRes.data;
           
           if (currentSheet && currentSheet.weeks) {
-            const formattedFeedback = `[RPE ${rpe}/10 · ${impact.totalSetsCompleted} serie · ${impact.totalTonnageKg}kg] ${notes}`.trim();
+            const formattedFeedback = `[RPE ${rpe}/10 · ${totalSetsCompleted} serie · ${Math.round(totalTonnageKg)}kg] ${notes}`.trim();
             const updatedWeeks = currentSheet.weeks.map(w => {
               if (!weekIdParam || w.id === weekIdParam) {
                 return {
@@ -301,14 +460,33 @@ export default function WorkoutMode() {
                         dailyFeedback: formattedFeedback,
                         exercises: (d.exercises || []).map(ex => {
                           const customNote = exerciseNotes[ex.id];
-                          if (customNote) {
-                            return {
-                              ...ex,
-                              athlete_notes: customNote,
-                              athleteNotes: customNote
-                            };
+                          const completedEx = completedExercises.find(ce => ce.exerciseId === ex.id || ce.name === ex.exercise);
+                          const lastSet = completedEx?.sets?.[completedEx.sets.length - 1];
+                          const updatedWeight = lastSet && lastSet.weight > 0 ? `${lastSet.weight}` : ex.weight;
+
+                          let updatedDetails = ex.set_details || ex.setDetails;
+                          if (completedEx && Array.isArray(completedEx.sets) && completedEx.sets.length > 0 && Array.isArray(updatedDetails)) {
+                            updatedDetails = updatedDetails.map((sd, sIdx) => {
+                              const matchedSet = completedEx.sets.find(cs => cs.setNumber === sIdx + 1);
+                              if (matchedSet) {
+                                return {
+                                  ...sd,
+                                  weight: matchedSet.weight > 0 ? String(matchedSet.weight) : sd.weight,
+                                  reps: matchedSet.reps > 0 ? String(matchedSet.reps) : sd.reps
+                                };
+                              }
+                              return sd;
+                            });
                           }
-                          return ex;
+
+                          return {
+                            ...ex,
+                            weight: updatedWeight || ex.weight,
+                            set_details: updatedDetails || ex.set_details,
+                            setDetails: updatedDetails || ex.setDetails,
+                            athlete_notes: customNote || ex.athlete_notes,
+                            athleteNotes: customNote || ex.athleteNotes
+                          };
                         })
                       };
                     }
@@ -327,7 +505,7 @@ export default function WorkoutMode() {
         }
       }
 
-      toast.success("Workout completato! Sessione e analisi muscolare registrate con successo 💪");
+      toast.success("Workout completato! Sessione e progressi registrati con successo 💪");
       navigate('/athlete');
     } catch (e) {
       toast.error("Errore durante il salvataggio");
@@ -495,8 +673,32 @@ export default function WorkoutMode() {
           </div>
         </div>
 
-        {/* Controlli Timer & Audio */}
-        <div className="flex items-center gap-2">
+        {/* Controlli Timer, Strumenti & Audio */}
+        <div className="flex items-center gap-1.5">
+          {/* Apri Cronometro / AMRAP / EMOM */}
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setToolboxOpen(true)}
+            className="h-8 px-2.5 text-xs rounded-xl gap-1.5 bg-zinc-900 border border-zinc-800 text-emerald-400 hover:bg-emerald-500/10 hover:text-emerald-300 font-bold"
+            title="Apri Cronometro & Timer (AMRAP / EMOM)"
+          >
+            <Clock className="h-3.5 w-3.5" />
+            <span className="hidden sm:inline">Cronometro</span>
+          </Button>
+
+          {/* Apri Calcolatore & Percentuali */}
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setCalcModalOpen(true)}
+            className="h-8 px-2.5 text-xs rounded-xl gap-1.5 bg-zinc-900 border border-zinc-800 text-sky-400 hover:bg-sky-500/10 hover:text-sky-300 font-bold"
+            title="Calcola 1RM, Percentuali e Scalo %"
+          >
+            <Percent className="h-3.5 w-3.5" />
+            <span className="hidden sm:inline">Percentuali</span>
+          </Button>
+
           {/* Toggle Rest Timer ON/OFF */}
           <Button
             variant="ghost"
@@ -515,7 +717,7 @@ export default function WorkoutMode() {
             title={timerEnabled ? "Disattiva Rest Timer" : "Attiva Rest Timer"}
           >
             <Timer className="h-3.5 w-3.5" />
-            <span className="hidden xs:inline">{timerEnabled ? "Timer ON" : "Timer OFF"}</span>
+            <span className="hidden md:inline">{timerEnabled ? "Timer ON" : "Timer OFF"}</span>
           </Button>
 
           {/* Toggle Audio Muto/Suono */}
@@ -612,19 +814,30 @@ export default function WorkoutMode() {
                 <span className="text-[10px] text-zinc-500 font-sans italic">(Scorsa volta: {activeExercise.lastWeight} kg)</span>
               )}
             </span>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => {
-                const w = parseFloat(activeExercise.lastWeight) || 60;
-                setPlateCalcWeight(w);
-                setPlateCalcOpen(true);
-              }}
-              className="h-7 px-2 text-[11px] font-bold text-emerald-400 hover:text-emerald-300 hover:bg-emerald-500/10 gap-1 rounded-lg"
-              title="Calcola dischi bilanciere"
-            >
-              <Disc className="h-3.5 w-3.5" /> Dischi
-            </Button>
+            <div className="flex items-center gap-1.5">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setCalcModalOpen(true)}
+                className="h-7 px-2 text-[11px] font-bold text-sky-400 hover:text-sky-300 hover:bg-sky-500/10 gap-1 rounded-lg"
+                title="Calcola percentuali e scalo"
+              >
+                <Percent className="h-3.5 w-3.5" /> % & Scalo
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  const w = parseFloat(activeExercise.lastWeight) || 60;
+                  setPlateCalcWeight(w);
+                  setPlateCalcOpen(true);
+                }}
+                className="h-7 px-2 text-[11px] font-bold text-emerald-400 hover:text-emerald-300 hover:bg-emerald-500/10 gap-1 rounded-lg"
+                title="Calcola dischi bilanciere"
+              >
+                <Disc className="h-3.5 w-3.5" /> Dischi
+              </Button>
+            </div>
           </div>
         </div>
 
@@ -854,6 +1067,20 @@ export default function WorkoutMode() {
           initialWeight={plateCalcWeight}
         />
       )}
+
+      {/* Modal Cronometro & Timer (AMRAP / EMOM / Stopwatch) */}
+      <Dialog open={toolboxOpen} onOpenChange={setToolboxOpen}>
+        <DialogContent className="sm:max-w-md p-0 border-none bg-transparent shadow-none">
+          <WorkoutToolbox />
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal Calcolatore 1RM, Percentuali & Riduzioni */}
+      <Dialog open={calcModalOpen} onOpenChange={setCalcModalOpen}>
+        <DialogContent className="sm:max-w-md bg-zinc-950 border-zinc-800 text-white p-0 overflow-hidden shadow-2xl">
+          <Calculator />
+        </DialogContent>
+      </Dialog>
 
     </div>
   );

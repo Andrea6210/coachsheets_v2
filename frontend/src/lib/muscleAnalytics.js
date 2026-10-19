@@ -106,18 +106,27 @@ export const computeSessionMuscleImpact = (exercises = [], setLogs = {}) => {
     for (let i = 0; i < targetSets; i++) {
       const key = `${ex.id}-${i}`;
       const log = setLogs[key];
-      if (log && log.completed) {
+      const detailedSet = ex.set_details?.[i];
+      const fallbackWeight = detailedSet?.weight ? parseFloat(detailedSet.weight) : (parseFloat(ex.lastWeight) || 0);
+      const fallbackReps = detailedSet?.reps ? parseInt(detailedSet.reps) : (parseInt(ex.targetReps) || 8);
+
+      const isExplicitlyDone = Boolean(log && log.completed);
+      const hasEnteredValues = Boolean(log && ((log.weight !== undefined && log.weight !== '') || (log.reps !== undefined && log.reps !== '')));
+
+      if (isExplicitlyDone || hasEnteredValues) {
         completedSetsForEx++;
         totalSetsCompleted++;
-        
-        const weightVal = parseFloat(log.weight) || 0;
-        const repsVal = parseInt(log.reps) || 0;
-        const setTonnage = weightVal * repsVal;
+
+        const weightVal = (log?.weight !== undefined && log?.weight !== '') ? parseFloat(log.weight) : fallbackWeight;
+        const repsVal = (log?.reps !== undefined && log?.reps !== '') ? parseInt(log.reps) : fallbackReps;
+        const validWeight = isNaN(weightVal) ? 0 : Math.max(0, weightVal);
+        const validReps = isNaN(repsVal) ? 0 : Math.max(0, repsVal);
+        const setTonnage = validWeight * validReps;
 
         tonnageForEx += setTonnage;
         totalTonnageKg += setTonnage;
-        repsForEx += repsVal;
-        totalRepsCount += repsVal;
+        repsForEx += validReps;
+        totalRepsCount += validReps;
       }
     }
 

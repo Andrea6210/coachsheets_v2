@@ -73,35 +73,133 @@ export default function AthleteDashboard() {
       const token = localStorage.getItem("token");
       const headers = token ? { Authorization: `Bearer ${token}` } : {};
 
+      // Carica i workout salvati localmente (sia con ID utente che guest)
+      let localWorkouts = [];
+      try {
+        const localKeys = [`coachsheets_completed_workouts_${user?.id}`, 'coachsheets_completed_workouts_guest'].filter(Boolean);
+        const seenLocalIds = new Set();
+        for (const k of localKeys) {
+          const raw = localStorage.getItem(k);
+          if (raw) {
+            const parsed = JSON.parse(raw);
+            if (Array.isArray(parsed)) {
+              parsed.forEach(p => {
+                if (p && p.id && !seenLocalIds.has(p.id)) {
+                  seenLocalIds.add(p.id);
+                  localWorkouts.push(p);
+                }
+              });
+            }
+          }
+        }
+      } catch {}
+
       const [sheetsRes, sessionsRes, analyticsRes] = await Promise.allSettled([
         axios.get(`${API}/sheets`, { headers }),
         axios.get(`${API}/workout-sessions`, { headers }),
         axios.get(`${API}/workout-sessions/analytics`, { headers })
       ]);
 
-      if (sheetsRes.status === "fulfilled") {
+      if (sheetsRes.status === "fulfilled" && Array.isArray(sheetsRes.value.data)) {
         setSheets(sheetsRes.value.data);
       }
       
-      let mergedWorkouts = [...completedWorkouts];
+      let mergedWorkouts = [...localWorkouts];
       if (sessionsRes.status === "fulfilled" && Array.isArray(sessionsRes.value.data)) {
-        const backendSessions = sessionsRes.value.data.map(s => ({
-          id: s.id,
-          sheetId: s.sheetId,
-          dayName: s.dayName,
-          date: s.sessionDate,
-          timestamp: s.createdAt || s.completedAt,
-          rpe: s.dayFeedbackRpe,
-          notes: s.dayFeedbackSensations,
-          trainedMuscles: s.exerciseLogs ? s.exerciseLogs.map(el => el.exerciseName) : []
-        }));
-        const ids = new Set(backendSessions.map(b => b.id));
-        mergedWorkouts = [...backendSessions, ...completedWorkouts.filter(c => !ids.has(c.id))];
-        setCompletedWorkouts(mergedWorkouts);
+        const backendSessions = sessionsRes.value.data.map(s => {
+          let totalSets = 0;
+          let totalTonnage = 0;
+          const trainedMuscleSet = new Set();
+          const breakdown = {};
+
+          // Supporta sia snake_case che camelCase dal backend Spring Boot
+          const logs = s.exercise_logs || s.exerciseLogs || [];
+          if (Array.isArray(logs)) {
+            logs.forEach(el => {
+              const exName = el.exercise_name || el.exerciseName || el.name;
+              const muscle = classifyExerciseMuscle(exName)?.primary;
+              if (muscle) trainedMuscleSet.add(muscle);
+
+              const sets = el.sets || [];
+              if (Array.isArray(sets)) {
+                sets.forEach(st => {
+                  const isDone = st.is_completed ?? st.isCompleted ?? false;
+                  const reps = st.actual_reps ?? st.actualReps ?? st.reps ?? 0;
+                  const weight = st.actual_weight ?? st.actualWeight ?? st.weight ?? 0;
+
+                  if (isDone || reps > 0) {
+                    totalSets += 1;
+                    const t = weight * reps;
+                    totalTonnage += t;
+                    if (muscle) {
+                      breakdown[muscle] = (breakdown[muscle] || 0) + 1;
+                    }
+                  }
+                });
+              }
+            });
+          }
+
+          // Se il log del backend non ha dettagli completi, recupera dall'equivalente locale se presente
+          const matchedLocal = localWorkouts.find(l => l.id === s.id);
+          const finalSets = totalSets > 0 ? totalSets : (matchedLocal?.totalSets || 0);
+          const finalTonnage = totalTonnage > 0 ? totalTonnage : (matchedLocal?.totalTonnage || 0);
+          const finalTrainedMuscles = trainedMuscleSet.size > 0 
+            ? Array.from(trainedMuscleSet) 
+            : (matchedLocal?.trainedMuscles || matchedLocal?.trained_muscles || []);
+          const finalBreakdown = Object.keys(breakdown).length > 0
+            ? Object.entries(breakdown).map(([muscle, completedSets]) => ({
+                muscle,
+                completedSets,
+                tonnageKg: 0,
+                exercises: []
+              }))
+            : (matchedLocal?.muscleBreakdown || matchedLocal?.muscle_breakdown || []);
+
+          const sessionDate = s.session_date || s.sessionDate || (s.created_at || s.createdAt || '').split('T')[0] || matchedLocal?.date || '';
+          const timestamp = s.created_at || s.createdAt || s.completed_at || s.completedAt || matchedLocal?.timestamp || sessionDate;
+
+          return {
+            id: s.id,
+            sheetId: s.sheet_id || s.sheetId || matchedLocal?.sheetId,
+            dayName: s.day_name || s.dayName || matchedLocal?.dayName,
+            date: sessionDate,
+            timestamp: timestamp,
+            rpe: s.day_feedback_rpe || s.dayFeedbackRpe || matchedLocal?.rpe,
+            notes: s.day_feedback_sensations || s.dayFeedbackSensations || matchedLocal?.notes,
+            totalSets: finalSets,
+            totalTonnage: Math.round(finalTonnage),
+            trainedMuscles: finalTrainedMuscles,
+            muscleBreakdown: finalBreakdown
+          };
+        });
+
+        const backendIds = new Set(backendSessions.map(b => b.id));
+        mergedWorkouts = [...backendSessions, ...localWorkouts.filter(c => c && c.id && !backendIds.has(c.id))];
       }
+      setCompletedWorkouts(mergedWorkouts);
 
       if (analyticsRes.status === "fulfilled" && analyticsRes.value.data) {
-        setMuscleAnalytics(analyticsRes.value.data);
+        const raw = analyticsRes.value.data;
+        const normalizedAnalytics = {
+          totalSessions: raw.total_sessions ?? raw.totalSessions ?? 0,
+          grandTotalSets: raw.grand_total_sets ?? raw.grandTotalSets ?? 0,
+          grandTotalTonnageKg: raw.grand_total_tonnage_kg ?? raw.grandTotalTonnageKg ?? 0,
+          muscles: (raw.muscles || []).map(m => ({
+            muscleGroup: m.muscle_group || m.muscleGroup || "Muscolo",
+            totalSets: m.total_sets ?? m.totalSets ?? 0,
+            totalReps: m.total_reps ?? m.totalReps ?? 0,
+            totalTonnage: m.total_tonnage ?? m.totalTonnage ?? 0,
+            recentSets7d: m.recent_sets_7d ?? m.recentSets7d ?? 0,
+            recentSets30d: m.recent_sets_30d ?? m.recentSets30d ?? 0,
+            workoutsCount: m.workouts_count ?? m.workoutsCount ?? 0,
+            lastTrainedDate: m.last_trained_date || m.lastTrainedDate || null,
+            recoveryStatus: m.recovery_status || m.recoveryStatus || "Recuperato",
+            recoveryPercent: m.recovery_percent ?? m.recoveryPercent ?? 100,
+            badgeColor: m.badge_color || m.badgeColor || "emerald"
+          }))
+        };
+        setMuscleAnalytics(normalizedAnalytics);
       }
     } catch (e) {
       console.warn("Errore caricamento dati atleta:", e);
@@ -110,32 +208,51 @@ export default function AthleteDashboard() {
     }
   };
 
-  // Build current week schedule dynamically without hardcoded fake completions
+  // Costruzione della programmazione settimanale basandosi sui dati reali
   const getCurrentWeekSchedule = () => {
     const today = new Date();
     const dayOfWeek = today.getDay(); // 0 is Sun, 1 is Mon
     const distanceToMon = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
     const monday = new Date(today);
     monday.setDate(today.getDate() + distanceToMon);
+    monday.setHours(0, 0, 0, 0);
 
     const dayLabels = ["LUN", "MAR", "MER", "GIO", "VEN", "SAB", "DOM"];
+
+    const activeSheet = sheets?.[0];
+    const activeWeekDays = activeSheet?.weeks?.[0]?.days || [];
 
     return dayLabels.map((label, index) => {
       const d = new Date(monday);
       d.setDate(monday.getDate() + index);
       const dateStr = d.toLocaleDateString('it-IT', { day: '2-digit', month: 'short' });
-      const isoStr = d.toISOString().split('T')[0];
+      
+      const year = d.getFullYear();
+      const month = String(d.getMonth() + 1).padStart(2, '0');
+      const day = String(d.getDate()).padStart(2, '0');
+      const isoStr = `${year}-${month}-${day}`;
 
-      // Check if user completed a workout on this date
-      const isDone = completedWorkouts.some(cw => cw.date === isoStr || cw.dateStr === dateStr);
+      // Verifica se l'atleta ha completato un allenamento in questa data specifica
+      const isDone = completedWorkouts.some(cw => {
+        if (!cw) return false;
+        const cwDate = cw.date || cw.session_date || cw.sessionDate || (cw.timestamp ? cw.timestamp.split('T')[0] : '') || (cw.created_at ? cw.created_at.split('T')[0] : '');
+        return cwDate === isoStr || cw.dateStr === dateStr;
+      });
 
-      // Check if sheet schedules a workout on this weekday (e.g., Lun, Mer, Ven)
-      const isScheduled = index === 0 || index === 2 || index === 4;
+      // Controlla se la scheda ha un giorno assegnato a questo giorno della settimana
+      const isScheduledInSheet = Boolean(activeWeekDays.some((dayObj, dIdx) => {
+        const nameUpper = (dayObj?.name || "").toUpperCase();
+        if (nameUpper.includes(label)) return true;
+        if (activeWeekDays.length > 0 && dIdx === index && activeWeekDays.length <= 4) {
+          return true;
+        }
+        return false;
+      }));
 
       let status = "Riposo";
       if (isDone) {
         status = "Completato";
-      } else if (isScheduled) {
+      } else if (isScheduledInSheet) {
         status = "In Programma";
       }
 
@@ -150,7 +267,7 @@ export default function AthleteDashboard() {
   const currentWeekSchedule = getCurrentWeekSchedule();
   const completedWorkoutsThisWeek = currentWeekSchedule.filter(s => s.status === "Completato").length;
 
-  // Compute muscle recovery dynamically based on recent completed workouts (last 48 hours)
+  // Calcolo recupero muscolare dinamico reale basato esclusivamente sugli allenamenti svolti (ultime 48 ore)
   const computeMuscleRecovery = () => {
     const muscles = [
       { name: "Petto", group: "Petto" },
@@ -164,25 +281,73 @@ export default function AthleteDashboard() {
 
     const now = Date.now();
     const recentWorkouts = completedWorkouts.filter(w => {
-      const wTime = new Date(w.timestamp || w.date).getTime();
-      return (now - wTime) < (48 * 3600 * 1000); // within 48h
+      const dateVal = w.timestamp || w.created_at || w.completed_at || w.date || w.session_date;
+      if (!dateVal) return false;
+      const wTime = new Date(dateVal).getTime();
+      // Nelle ultime 48 ore (con tolleranza di 12 ore per fuso orario UTC vs locale)
+      return !isNaN(wTime) && (now - wTime) < (48 * 3600 * 1000) && (now - wTime) >= -(12 * 3600 * 1000);
     });
 
     const trainedGroups = new Set();
     recentWorkouts.forEach(w => {
-      if (w.trainedMuscles) {
+      if (Array.isArray(w.trainedMuscles)) {
         w.trainedMuscles.forEach(m => trainedGroups.add(m));
+      }
+      if (Array.isArray(w.trained_muscles)) {
+        w.trained_muscles.forEach(m => trainedGroups.add(m));
+      }
+      if (Array.isArray(w.muscleBreakdown)) {
+        w.muscleBreakdown.forEach(mb => {
+          if (mb.muscle) trainedGroups.add(mb.muscle);
+        });
+      }
+      if (Array.isArray(w.muscle_breakdown)) {
+        w.muscle_breakdown.forEach(mb => {
+          if (mb.muscle) trainedGroups.add(mb.muscle);
+        });
+      }
+      const logs = w.exerciseLogs || w.exercise_logs;
+      if (Array.isArray(logs)) {
+        logs.forEach(el => {
+          const exName = el.name || el.exerciseName || el.exercise_name;
+          const classification = classifyExerciseMuscle(exName);
+          if (classification?.primary) trainedGroups.add(classification.primary);
+          if (Array.isArray(classification?.secondary)) {
+            classification.secondary.forEach(s => trainedGroups.add(s));
+          }
+        });
       }
     });
 
+    const hasAnyWorkoutsEver = completedWorkouts.length > 0;
+
+    const isGroupRecovering = (groupName) => {
+      if (groupName === "Gambe") {
+        return trainedGroups.has("Gambe") || trainedGroups.has("Quadricipiti") || 
+               trainedGroups.has("Catena Posteriore") || trainedGroups.has("Polpacci");
+      }
+      if (groupName === "Core") {
+        return trainedGroups.has("Core") || trainedGroups.has("Addome / Core");
+      }
+      return trainedGroups.has(groupName);
+    };
+
     return muscles.map(m => {
-      const isRecovering = trainedGroups.has(m.group);
+      const isRecovering = isGroupRecovering(m.group);
       if (isRecovering) {
         return {
           name: m.name,
           level: "In Recupero",
-          percent: 70,
+          percent: 65,
           color: "text-amber-400 bg-amber-500/10 border-amber-500/30"
+        };
+      }
+      if (!hasAnyWorkoutsEver) {
+        return {
+          name: m.name,
+          level: "Pronto",
+          percent: 100,
+          color: "text-zinc-400 bg-zinc-900 border-zinc-800"
         };
       }
       return {
@@ -554,25 +719,37 @@ export default function AthleteDashboard() {
 
           {analyticsView === "recovery" ? (
             <div className="space-y-3 pt-1">
-              <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-3">
-                {muscleFatigue.map((m) => (
-                  <div key={m.name} className="bg-zinc-950/80 border border-zinc-800/80 p-3 rounded-2xl space-y-2 text-center">
-                    <p className="text-xs font-bold text-white">{m.name}</p>
-                    <div className="h-1.5 w-full bg-zinc-900 rounded-full overflow-hidden">
-                      <div 
-                        className={`h-full rounded-full ${m.percent >= 80 ? 'bg-emerald-400' : 'bg-amber-400'}`}
-                        style={{ width: `${m.percent}%` }}
-                      />
-                    </div>
-                    <span className={`inline-block text-[10px] font-bold px-2 py-0.5 rounded border ${m.color}`}>
-                      {m.level}
-                    </span>
+              {completedWorkouts.length === 0 ? (
+                <div className="p-8 text-center border border-dashed border-zinc-800 rounded-2xl bg-zinc-950/40 space-y-2">
+                  <Activity className="h-8 w-8 mx-auto text-zinc-600" />
+                  <p className="text-xs font-bold text-zinc-300">Nessun affaticamento muscolare registrato</p>
+                  <p className="text-[11px] text-zinc-500 max-w-sm mx-auto">
+                    La mappa dei gruppi muscolari e il tempo di recupero (48h) si aggiorneranno in tempo reale al completamento del tuo primo workout.
+                  </p>
+                </div>
+              ) : (
+                <>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-3">
+                    {muscleFatigue.map((m) => (
+                      <div key={m.name} className="bg-zinc-950/80 border border-zinc-800/80 p-3 rounded-2xl space-y-2 text-center">
+                        <p className="text-xs font-bold text-white">{m.name}</p>
+                        <div className="h-1.5 w-full bg-zinc-900 rounded-full overflow-hidden">
+                          <div 
+                            className={`h-full rounded-full ${m.percent >= 80 ? 'bg-emerald-400' : 'bg-amber-400'}`}
+                            style={{ width: `${m.percent}%` }}
+                          />
+                        </div>
+                        <span className={`inline-block text-[10px] font-bold px-2 py-0.5 rounded border ${m.color}`}>
+                          {m.level}
+                        </span>
+                      </div>
+                    ))}
                   </div>
-                ))}
-              </div>
-              <p className="text-[11px] text-zinc-500 text-center italic pt-1">
-                Lo stato si aggiorna automaticamente ogni volta che avvii e completi un workout.
-              </p>
+                  <p className="text-[11px] text-zinc-500 text-center italic pt-1">
+                    Lo stato si aggiorna automaticamente in base ai distretti muscolari realmente allenati.
+                  </p>
+                </>
+              )}
             </div>
           ) : (
             <div className="space-y-4 pt-1">
@@ -600,40 +777,104 @@ export default function AthleteDashboard() {
               </div>
 
               {/* Muscle Details List */}
-              {(!muscleAnalytics?.muscles || muscleAnalytics.muscles.length === 0) && completedWorkouts.length === 0 ? (
-                <div className="p-6 text-center border border-dashed border-zinc-800 rounded-2xl bg-zinc-950/40 space-y-1">
-                  <p className="text-xs text-zinc-400">Nessun dato di allenamento ancora registrato.</p>
-                  <p className="text-[11px] text-emerald-400 font-medium">Premi &quot;Avvia Workout&quot; per iniziare a tracciare i tuoi carichi e muscoli reali!</p>
-                </div>
-              ) : (
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                  {(muscleAnalytics?.muscles || []).map((m) => {
-                    const style = getMuscleStyle(m.muscleGroup);
+              {(() => {
+                const totalSessions = muscleAnalytics?.totalSessions ?? completedWorkouts.length;
+                const totalSets = muscleAnalytics?.grandTotalSets ?? completedWorkouts.reduce((acc, w) => acc + (w.totalSets || 0), 0);
+                const filteredMuscles = (muscleAnalytics?.muscles || []).filter(m => (m.totalSets || 0) > 0);
+
+                if (totalSessions === 0 && totalSets === 0) {
+                  return (
+                    <div className="p-8 text-center border border-dashed border-zinc-800 rounded-2xl bg-zinc-950/40 space-y-2">
+                      <Activity className="h-8 w-8 mx-auto text-zinc-600" />
+                      <p className="text-xs font-bold text-zinc-300">Nessun allenamento ancora registrato</p>
+                      <p className="text-[11px] text-zinc-500 max-w-sm mx-auto">
+                        I grafici di volume, le serie e il tonnellaggio muscolare si popoleranno in automatico in base ai tuoi allenamenti svolti.
+                      </p>
+                    </div>
+                  );
+                }
+
+                if (filteredMuscles.length === 0 && completedWorkouts.length > 0) {
+                  const localMuscleAgg = {};
+                  completedWorkouts.forEach(w => {
+                    const breakdown = w.muscleBreakdown || w.muscle_breakdown;
+                    if (Array.isArray(breakdown)) {
+                      breakdown.forEach(mb => {
+                        if (mb && mb.muscle) {
+                          if (!localMuscleAgg[mb.muscle]) {
+                            localMuscleAgg[mb.muscle] = { sets: 0, tonnage: 0 };
+                          }
+                          localMuscleAgg[mb.muscle].sets += (mb.completedSets || 0);
+                          localMuscleAgg[mb.muscle].tonnage += (mb.tonnageKg || 0);
+                        }
+                      });
+                    }
+                  });
+
+                  const localList = Object.entries(localMuscleAgg).filter(([, data]) => data.sets > 0);
+                  if (localList.length === 0) {
                     return (
-                      <div key={m.muscleGroup} className="bg-zinc-950/80 border border-zinc-800/80 p-3.5 rounded-2xl space-y-2">
-                        <div className="flex items-center justify-between">
-                          <span className={`text-xs font-bold ${style.text}`}>{m.muscleGroup}</span>
-                          <span className={`text-[10px] font-bold px-2 py-0.5 rounded border ${
-                            m.badgeColor === 'amber' 
-                              ? 'text-amber-400 bg-amber-500/10 border-amber-500/30' 
-                              : 'text-emerald-400 bg-emerald-500/10 border-emerald-500/30'
-                          }`}>
-                            {m.recoveryStatus}
-                          </span>
-                        </div>
-                        <div className="flex items-baseline justify-between text-xs font-mono">
-                          <span className="text-zinc-400">Serie totali: <strong className="text-white">{m.totalSets}</strong></span>
-                          <span className="text-zinc-400">Kg: <strong className="text-amber-400">{m.totalTonnage?.toLocaleString()}</strong></span>
-                        </div>
-                        <div className="flex items-center justify-between text-[11px] text-zinc-500 pt-1 border-t border-zinc-900">
-                          <span>Ultimi 7 gg: <strong className="text-emerald-400 font-mono">{m.recentSets7d} serie</strong></span>
-                          <span>{m.lastTrainedDate ? `Ultimo: ${m.lastTrainedDate}` : 'Mai registrato'}</span>
-                        </div>
+                      <div className="p-6 text-center border border-dashed border-zinc-800 rounded-2xl bg-zinc-950/40">
+                        <p className="text-xs text-zinc-400">Nessuna serie completata registrata nei workout svolti.</p>
                       </div>
                     );
-                  })}
-                </div>
-              )}
+                  }
+
+                  return (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                      {localList.map(([muscleName, data]) => {
+                        const style = getMuscleStyle(muscleName);
+                        return (
+                          <div key={muscleName} className="bg-zinc-950/80 border border-zinc-800/80 p-3.5 rounded-2xl space-y-2">
+                            <div className="flex items-center justify-between">
+                              <span className={`text-xs font-bold ${style.text}`}>{muscleName}</span>
+                              <span className="text-[10px] font-bold px-2 py-0.5 rounded border text-amber-400 bg-amber-500/10 border-amber-500/30">
+                                In Recupero
+                              </span>
+                            </div>
+                            <div className="flex items-baseline justify-between text-xs font-mono">
+                              <span className="text-zinc-400">Serie totali: <strong className="text-white">{data.sets}</strong></span>
+                              {data.tonnage > 0 && (
+                                <span className="text-zinc-400">Kg: <strong className="text-amber-400">{Math.round(data.tonnage).toLocaleString()}</strong></span>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  );
+                }
+
+                return (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                    {filteredMuscles.map((m) => {
+                      const style = getMuscleStyle(m.muscleGroup);
+                      return (
+                        <div key={m.muscleGroup} className="bg-zinc-950/80 border border-zinc-800/80 p-3.5 rounded-2xl space-y-2">
+                          <div className="flex items-center justify-between">
+                            <span className={`text-xs font-bold ${style.text}`}>{m.muscleGroup}</span>
+                            <span className={`text-[10px] font-bold px-2 py-0.5 rounded border ${
+                              m.badgeColor === 'amber' 
+                                ? 'text-amber-400 bg-amber-500/10 border-amber-500/30' 
+                                : 'text-emerald-400 bg-emerald-500/10 border-emerald-500/30'
+                            }`}>
+                              {m.recoveryStatus}
+                            </span>
+                          </div>
+                          <div className="flex items-baseline justify-between text-xs font-mono">
+                            <span className="text-zinc-400">Serie totali: <strong className="text-white">{m.totalSets}</strong></span>
+                            <span className="text-zinc-400">Kg: <strong className="text-amber-400">{m.totalTonnage?.toLocaleString()}</strong></span>
+                          </div>
+                          <div className="flex items-center justify-between text-[11px] text-zinc-500 pt-1 border-t border-zinc-900">
+                            <span>Ultimi 7 gg: <strong className="text-emerald-400 font-mono">{m.recentSets7d} serie</strong></span>
+                            <span>{m.lastTrainedDate ? `Ultimo: ${m.lastTrainedDate}` : 'Recente'}</span>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                );
+              })()}
             </div>
           )}
         </div>
